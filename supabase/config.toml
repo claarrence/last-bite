@@ -1,0 +1,5 @@
+project_id = "last-bite"
+
+# The function validates the user with Supabase Auth in its handler.
+[functions.onemap]
+verify_jwt = false
