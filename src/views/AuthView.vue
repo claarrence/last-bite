@@ -66,9 +66,30 @@ async function register() {
   }
 
   const profile = { id: data.user.id, name: name.value }
-  if (role.value === 'establishment') profile.business_type = businessType.value
+  if (role.value === 'establishment') {
+    profile.business_type = businessType.value
+  }
   const { error: profileError } = await supabase.from(profileTable.value).insert(profile)
-  if (profileError) alert(profileError.message)
+  if (profileError) {
+    alert(profileError.message)
+    return
+  }
+
+  if (data.session) await supabase.auth.signOut()
+  showLoginAfterRegister(!data.session)
+}
+
+function showLoginAfterRegister(needsEmailConfirmation) {
+  const registeredEmail = email.value
+  mode.value = 'login'
+  resetForm()
+  email.value = registeredEmail
+  if (needsEmailConfirmation) {
+    registeredMessage.value =
+      'Registration successful! Check your email to confirm your account, then log in.'
+  } else {
+    registeredMessage.value = 'Registration successful! Log in to continue.'
+  }
 }
 
 async function login() {
