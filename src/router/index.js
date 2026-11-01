@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import AuthView from '@/views/AuthView.vue'
 import Dashboard from '@/views/establishment/Dashboard.vue'
+import ListingFormView from '@/views/listings/ListingFormView.vue'
 import { getCurrentUser } from '@/utils/session'
 
 const router = createRouter({
@@ -24,6 +25,19 @@ const router = createRouter({
       path: '/establishment-dashboard',
       name: 'establishment-dashboard',
       component: Dashboard,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/listing-form',
+      name: 'listing-form',
+      component: ListingFormView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/listings/:id/edit',
+      name: 'listing-edit',
+      component: ListingFormView,
+      props: true,
       meta: { requiresAuth: true },
     },
   ],

@@ -14,3 +14,19 @@ export async function isEstablishment() {
   if (error) return false
   return data === true
 }
+
+// The pickup location an establishment chose at registration, or null if none was saved.
+// Pre-filling is only a convenience, so a failed lookup is treated as "no saved location".
+export async function getEstablishmentLocation(establishmentId) {
+  const { data, error } = await supabase
+    .from('establishment')
+    .select('address, lat, lng')
+    .eq('id', establishmentId)
+    .maybeSingle()
+  if (error || !data?.address) return null
+  return {
+    address: data.address,
+    lat: data.lat == null ? null : Number(data.lat),
+    lng: data.lng == null ? null : Number(data.lng),
+  }
+}
