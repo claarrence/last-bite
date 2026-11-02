@@ -1,9 +1,14 @@
 const dayFormat = new Intl.DateTimeFormat('en-SG', {
+  timeZone: 'Asia/Singapore',
   weekday: 'short',
   day: 'numeric',
   month: 'short',
 })
-const timeFormat = new Intl.DateTimeFormat('en-SG', { hour: 'numeric', minute: '2-digit' })
+const timeFormat = new Intl.DateTimeFormat('en-SG', {
+  timeZone: 'Asia/Singapore',
+  hour: 'numeric',
+  minute: '2-digit',
+})
 
 // "Mon 13 Oct · 6:00 pm – 7:00 pm"
 export function formatPickupWindow(start, end) {

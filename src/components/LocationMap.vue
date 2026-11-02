@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+import { SINGAPORE, SINGAPORE_BOUNDS } from '@/utils/map'
 
 // A plain L.icon is used because
 // L.Icon.Default prefixes its own image path onto the URL, which breaks Vite asset/data URLs.
@@ -32,7 +33,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['pick'])
 
-const SINGAPORE = [1.3521, 103.8198]
 const el = ref(null)
 const tileError = ref(false)
 let tiles = null
@@ -46,7 +46,7 @@ onMounted(() => {
     center: SINGAPORE,
     zoom: 12,
     minZoom: 11,
-    maxBounds: L.latLngBounds([1.144, 103.535], [1.494, 104.1]),
+    maxBounds: L.latLngBounds(SINGAPORE_BOUNDS),
   })
   tiles = L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
     maxZoom: 19,

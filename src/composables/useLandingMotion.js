@@ -10,6 +10,7 @@ export function useLandingMotion(logo, navbar) {
   const finish = ref({ x: 0, y: 0 })
   let distance = 250
   let frame = 0
+  let layoutFrame = 0
   let preference
 
   const active = computed(() => ready.value && !reducedMotion.value && !navbar.value?.menuOpen)
@@ -59,8 +60,9 @@ export function useLandingMotion(logo, navbar) {
     const navbarTop = target.closest('nav').getBoundingClientRect().top
     finish.value = { x: targetBox.left, y: targetBox.top - navbarTop }
     distance = Math.max(160, start.value.y - finish.value.y + sourceBox.height * 0.5)
+    // Set the current pose before showing the floating logo, including on a scrolled refresh.
+    update()
     ready.value = true
-    queueUpdate()
   }
 
   function checkPreference() {
@@ -71,7 +73,8 @@ export function useLandingMotion(logo, navbar) {
   onMounted(() => {
     preference = window.matchMedia('(prefers-reduced-motion: reduce)')
     checkPreference()
-    measure()
+    // Let the router restore the page position before the first animated pose is measured.
+    layoutFrame = requestAnimationFrame(measure)
     window.addEventListener('scroll', queueUpdate, { passive: true })
     window.addEventListener('resize', measure)
     preference.addEventListener('change', checkPreference)
@@ -79,6 +82,7 @@ export function useLandingMotion(logo, navbar) {
 
   onBeforeUnmount(() => {
     cancelAnimationFrame(frame)
+    cancelAnimationFrame(layoutFrame)
     window.removeEventListener('scroll', queueUpdate)
     window.removeEventListener('resize', measure)
     preference?.removeEventListener('change', checkPreference)
