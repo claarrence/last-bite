@@ -80,10 +80,6 @@ export async function getAvailableListings() {
   return data
 }
 
-export function setListingStatus(id, status) {
-  return updateListing(id, { status })
-}
-
 // The database refuses to delete a listing that has reservation records
 // (foreign-key error 23503), so booking history is never lost.
 export async function deleteListing(listing) {

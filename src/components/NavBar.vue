@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BrandLogo from '@/components/BrandLogo.vue'
+import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { supabase } from '@/utils/supabase'
 import { getCurrentUser } from '@/utils/session'
 
@@ -16,6 +17,7 @@ function closeMenu() {
 
 const user = ref(null)
 const router = useRouter()
+const { homeHref, goHome, homeEntrance } = useHomeNavigation()
 let subscription
 
 // Profile avatar (top right) with the account links.
@@ -30,6 +32,11 @@ function toggleAccount() {
 function closeAccount() {
   accountOpen.value = false
 }
+
+watch(homeEntrance, () => {
+  closeMenu()
+  closeAccount()
+})
 
 // Clicking anywhere outside the avatar menu closes it.
 function closeAccountOnOutsideClick(event) {
@@ -74,40 +81,34 @@ async function logout() {
     aria-label="Main navigation"
   >
     <div class="container">
-      <router-link to="/" class="navbar-brand m-0" aria-label="Last Bite home"
+      <a :href="homeHref" class="navbar-brand m-0" aria-label="Last Bite home" @click="goHome"
         ><span ref="brandElement" class="nav-brand-target" :style="{ opacity: brandOpacity }"
           ><BrandLogo /></span
-      ></router-link>
+      ></a>
 
       <!-- Always visible; on wide screens it moves to the far right (order-sm-last). -->
-      <div
-        v-if="user"
-        ref="accountMenu"
-        class="account-menu order-sm-last ms-auto ms-sm-3"
-        @keydown.esc="closeAccount"
-      >
-        <button
-          type="button"
-          class="avatar-button"
-          aria-haspopup="true"
-          :aria-expanded="accountOpen"
-          :aria-label="`Account menu for ${user.email}`"
-          data-testid="avatar-button"
-          @click="toggleAccount"
-        >
-          {{ initial }}
-        </button>
-        <div v-if="accountOpen" class="account-dropdown" data-testid="account-dropdown">
-          <p class="account-email">{{ user.email }}</p>
-          <button type="button" class="account-link account-logout" @click="logout">Log out</button>
+      <div class="account-controls order-sm-last ms-auto ms-sm-3">
+        <div v-if="user" ref="accountMenu" class="account-menu" @keydown.esc="closeAccount">
+          <button
+            type="button"
+            class="avatar-button"
+            aria-haspopup="true"
+            :aria-expanded="accountOpen"
+            :aria-label="`Account menu for ${user.email}`"
+            data-testid="avatar-button"
+            @click="toggleAccount"
+          >
+            {{ initial }}
+          </button>
+          <div v-if="accountOpen" class="account-dropdown" data-testid="account-dropdown">
+            <p class="account-email">{{ user.email }}</p>
+            <button type="button" class="account-link account-logout" @click="logout">
+              Log out
+            </button>
+          </div>
         </div>
+        <router-link v-else to="/auth" class="btn btn-sm btn-outline-success">Log in</router-link>
       </div>
-      <router-link
-        v-else
-        to="/auth"
-        class="btn btn-sm btn-outline-success order-sm-last ms-auto ms-sm-3"
-        >Log in</router-link
-      >
 
       <button
         class="navbar-toggler ms-2"
@@ -132,6 +133,13 @@ async function logout() {
 </template>
 
 <style scoped>
+.account-controls {
+  display: flex;
+  min-width: 56px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: flex-end;
+}
 .account-menu {
   position: relative;
 }

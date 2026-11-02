@@ -23,10 +23,12 @@ const tabs = [
 const { busyId, pendingDelete, toggleStatus, requestDelete, cancelDelete, confirmDelete } =
   useListingActions({
     onUpdated: (updated) => {
-      listings.value = listings.value.map((l) => (l.id === updated.id ? updated : l))
+      listings.value = listings.value.map((listing) =>
+        listing.id === updated.id ? updated : listing,
+      )
     },
     onDeleted: (deleted) => {
-      listings.value = listings.value.filter((l) => l.id !== deleted.id)
+      listings.value = listings.value.filter((listing) => listing.id !== deleted.id)
     },
   })
 
@@ -42,7 +44,7 @@ onMounted(async () => {
 })
 
 const withStatus = computed(() =>
-  listings.value.map((l) => ({ listing: l, status: displayStatus(l) })),
+  listings.value.map((listing) => ({ listing, status: displayStatus(listing) })),
 )
 const counts = computed(() => {
   const totals = { open: 0, closed: 0, expired: 0 }
@@ -52,24 +54,20 @@ const counts = computed(() => {
 const activeTabLabel = computed(() =>
   tabs.find((tab) => tab.key === activeTab.value).label.toLowerCase(),
 )
-const visible = computed(() => withStatus.value.filter((x) => x.status === activeTab.value))
+const visible = computed(() => withStatus.value.filter((item) => item.status === activeTab.value))
 </script>
 
 <template>
   <NavBar />
 
-  <div class="container py-4">
-    <h1 class="h2 page-title mb-3">My Listings</h1>
+  <div class="container page-content py-4" :aria-busy="loading">
+    <h1 class="h2 page-title mb-3 page-enter">My Listings</h1>
 
-    <div v-if="loading" class="text-center py-5">
-      <div class="spinner-border text-success" role="status">
-        <span class="visually-hidden">Loading…</span>
-      </div>
+    <div v-if="!loading && error" class="alert alert-danger page-enter" role="alert">
+      {{ error }}
     </div>
 
-    <div v-else-if="error" class="alert alert-danger" role="alert">{{ error }}</div>
-
-    <template v-else>
+    <div v-else-if="!loading" class="page-enter">
       <ul class="nav nav-pills mb-4 flex-nowrap overflow-auto" role="tablist">
         <li v-for="tab in tabs" :key="tab.key" class="nav-item" role="presentation">
           <button
@@ -108,6 +106,7 @@ const visible = computed(() => withStatus.value.filter((x) => x.status === activ
             :listing="listing"
             :status="status"
             :photo-src="photoUrl(listing.photo_path)"
+            :to="{ name: 'listing-detail', params: { id: listing.id } }"
           >
             <template #actions>
               <div class="d-flex flex-wrap gap-2">
@@ -138,7 +137,7 @@ const visible = computed(() => withStatus.value.filter((x) => x.status === activ
           </ListingCard>
         </div>
       </div>
-    </template>
+    </div>
   </div>
 
   <PostFoodButton />
