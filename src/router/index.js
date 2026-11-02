@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import AuthView from '@/views/AuthView.vue'
 import Dashboard from '@/views/establishment/Dashboard.vue'
 import ListingFormView from '@/views/listings/ListingFormView.vue'
+import MyListingsView from '@/views/listings/MyListingsView.vue'
 import { getCurrentUser } from '@/utils/session'
 
 const router = createRouter({
@@ -38,6 +39,12 @@ const router = createRouter({
       name: 'listing-edit',
       component: ListingFormView,
       props: true,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/my-listings',
+      name: 'my-listings',
+      component: MyListingsView,
       meta: { requiresAuth: true },
     },
   ],
