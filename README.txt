@@ -118,7 +118,8 @@ PROJECT STRUCTURE
 
 THIRD-PARTY LIBRARIES
 ---------------------
-Vue, Vue Router, Bootstrap, Axios, Supabase JS, Leaflet (maps). All are free,
+Vue, Vue Router, Bootstrap, Axios, Supabase JS, Leaflet (maps) and Three.js
+(homepage rendering). All are free,
 open-source libraries installed through pnpm (see package.json).
 
 
@@ -194,7 +195,7 @@ The logo uses one Georgia serif style in src/assets/main.css on all routes;
 Home changes its size for the large version. Duplicate page font overrides
 have been removed. The compact food illustration, shared badge colours and
 Bootstrap controls keep the browse grid prominent. Footer links reserve room
-for the floating posting button. No new packages were added.
+for the floating posting button.
 
 Search uses title, pickup address and description. Food-type buttons combine
 with search; results can keep the backend's newest-first order or sort by pickup
@@ -205,6 +206,33 @@ search and food type. Empty results offer a clear action, without example data.
 Data flow: input/button -> Vue ref -> computed filtered/sorted list -> existing
 ListingCard components. Supabase remains the source of listings and reservation
 stock. Browser checks use mocked data; they do not add real food or reservations.
+
+The homepage's 3D food scene is isolated in src/components/HomeFoodScene.vue.
+Three.js loads on Home only, then WebGL renders curved porcelain plates,
+rounded golden tofu cubes, tomatoes, folded leaves and directional lighting.
+Food is modelled from shared 3D shapes; no flat photos are used in the
+renderer. The two small dishes keep the 22-second orbit around the large one; mouse movement tilts the group.
+
+Data flow: onMounted -> load Three.js -> create shared
+geometry/materials -> animation loop -> canvas. Ingredients use instancing
+so repeated pieces share a draw call. The plate shape comes from
+rotating a short cross-section (LatheGeometry); tofu uses RoundedBoxGeometry.
+One set of geometry/materials is reused where possible. No model files,
+post-processing stack or extra state library are needed.
+
+Reduced motion draws a still view. Rendering pauses offscreen and in hidden
+tabs; observers, listeners, materials and GPU resources are released
+when leaving Home. A static three-plate illustration stays visible while the
+renderer loads, if WebGL is unavailable, or if the graphics context is lost.
+Stars and dots complete the faint brown dotted backdrop. Floor shadows are
+omitted. Mouse position controls horizontal yaw, vertical tilt and slight
+parallax; leaving the artwork returns it to centre. No loading message or
+animation controls are added. FoodVisual.vue still supplies the account-page illustration; FoodLoader.vue handles action feedback.
+
+The Vue lifecycle, refs and async/await follow the slides. Three.js rendering
+is an additional project design choice, with one new dependency. Its separate
+chunk loads after Home mounts. Official API: https://threejs.org/docs/
+Browser checks: pnpm exec playwright test home-animation.spec.js --project=chromium
 
 
 CODE WALKTHROUGH
