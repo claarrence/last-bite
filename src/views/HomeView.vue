@@ -7,6 +7,7 @@ import PostFoodButton from '@/components/PostFoodButton.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
+import { distanceKm, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
@@ -34,6 +35,11 @@ const sortBy = ref('newest')
 const now = ref(new Date())
 let timer
 
+// The user's position, requested from the browser only when "Nearest to me" is chosen.
+const userLocation = ref(null)
+const locating = ref(false)
+const locationError = ref('')
+
 const foodTypes = [
   { value: 'all', label: 'All food' },
   { value: 'free', label: 'Free buffet' },
@@ -51,8 +57,85 @@ const visibleListings = computed(() => {
   })
   if (sortBy.value === 'ending') {
     results.sort((a, b) => new Date(a.pickup_end) - new Date(b.pickup_end))
+  } else if (sortBy.value === 'nearest' && userLocation.value) {
+    // Listings without map coordinates go last.
+    results.sort((a, b) => (cardDistance(a) ?? Infinity) - (cardDistance(b) ?? Infinity))
   }
   return results
+})
+
+// Distance in km from the user, or null when either location is unknown.
+// Only shown on cards while sorting by nearest.
+function cardDistance(listing) {
+  const coords = listingCoords(listing)
+  if (sortBy.value !== 'nearest' || !userLocation.value || !coords) return null
+  return distanceKm(userLocation.value, coords)
+}
+
+function getBrowserLocation() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 5 * 60 * 1000,
+    })
+  })
+}
+
+const BLOCKED_MESSAGE =
+  'Location is blocked for this site. Click the icon left of the address bar, set Location to Allow, then choose "Nearest to me" again.'
+
+// Asks the Permissions API whether location was already blocked; older browsers without it
+// fall through to the normal request.
+async function isLocationBlocked() {
+  try {
+    const permission = await navigator.permissions?.query({ name: 'geolocation' })
+    return permission?.state === 'denied'
+  } catch {
+    return false
+  }
+}
+
+async function locateUser() {
+  locationError.value = ''
+  if (!('geolocation' in navigator)) {
+    locationError.value = 'Your browser cannot share its location, so listings stay newest first.'
+    sortBy.value = 'newest'
+    return
+  }
+  // Browsers only allow location on HTTPS or localhost, and never show the popup there.
+  if (!window.isSecureContext) {
+    locationError.value =
+      'Location needs a secure (https://) connection. Open LastBite over HTTPS to sort by distance.'
+    sortBy.value = 'newest'
+    return
+  }
+  // Once location is blocked for this site, the browser will not ask again,
+  // so explain how to turn it back on instead of failing silently.
+  if (await isLocationBlocked()) {
+    locationError.value = BLOCKED_MESSAGE
+    sortBy.value = 'newest'
+    return
+  }
+  // This call shows the browser's "Allow location?" popup when the user has not decided yet.
+  locating.value = true
+  try {
+    const position = await getBrowserLocation()
+    userLocation.value = { lat: position.coords.latitude, lng: position.coords.longitude }
+  } catch (err) {
+    // err.code 1 means the user (or browser settings) blocked location access.
+    locationError.value =
+      err.code === 1 ? BLOCKED_MESSAGE : 'Could not find your location. Please try again.'
+    sortBy.value = 'newest'
+  } finally {
+    locating.value = false
+  }
+}
+
+// The warning is not cleared here: a failed lookup switches back to "newest",
+// which would otherwise hide the message straight away.
+watch(sortBy, (value) => {
+  if (value === 'nearest' && !userLocation.value) locateUser()
 })
 
 function clearFilters() {
@@ -149,13 +232,46 @@ onUnmounted(() => clearInterval(timer))
             {{ type.label }}
           </button>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <router-link
+            :to="{ name: 'listings-map' }"
+            class="btn btn-sm btn-outline-success text-nowrap"
+            data-testid="open-map"
+          >
+            <span aria-hidden="true">📍</span> View on map
+          </router-link>
           <label for="food-sort" class="small text-secondary text-nowrap">Sort by</label>
-          <select id="food-sort" v-model="sortBy" class="form-select form-select-sm">
+          <span
+            v-if="locating"
+            class="spinner-border spinner-border-sm text-success"
+            role="status"
+            aria-label="Finding your location"
+          ></span>
+          <select
+            id="food-sort"
+            v-model="sortBy"
+            class="form-select form-select-sm w-auto"
+            :disabled="locating"
+          >
             <option value="newest">Newest first</option>
             <option value="ending">Pickup ending soon</option>
+            <option value="nearest">Nearest to me</option>
           </select>
         </div>
+      </div>
+      <div
+        v-if="locationError"
+        class="alert alert-warning d-flex justify-content-between align-items-start gap-2 py-2 small"
+        role="alert"
+        data-testid="location-error"
+      >
+        <span>{{ locationError }}</span>
+        <button
+          type="button"
+          class="btn-close btn-sm"
+          aria-label="Dismiss location message"
+          @click="locationError = ''"
+        ></button>
       </div>
       <div v-if="!loading && error" class="alert alert-danger" role="alert">
         {{ error }}
@@ -206,6 +322,7 @@ onUnmounted(() => clearInterval(timer))
             :now="now"
             :photo-src="photoUrl(listing.photo_path)"
             :to="{ name: 'listing-detail', params: { id: listing.id } }"
+            :distance-km="cardDistance(listing)"
           />
         </div>
       </div>

@@ -160,3 +160,47 @@ test('the empty state links to posting without showing example listings', async 
   await page.locator('.browse-empty').getByRole('link', { name: 'Post food', exact: true }).click()
   await expect(page).toHaveURL(/\/auth\?redirect=\/listing-form$/)
 })
+
+test('nearest to me sorts food by distance from the user', async ({ page, context }) => {
+  // The user stands at SMU; Maxwell Food Centre is roughly 2 km away.
+  await context.grantPermissions(['geolocation'])
+  await context.setGeolocation({ latitude: 1.2966, longitude: 103.8502 })
+  const pinned = [
+    { ...listings[0], lat: 1.2966, lng: 103.8502 },
+    { ...listings[1], lat: 1.2803, lng: 103.8448 },
+    { ...listings[2] }, // never pinned, so it goes last
+  ]
+  await page.route('**/rest/v1/listings*', (route) => route.fulfill({ json: pinned }))
+  await page.goto('/#browse')
+  const cards = page.getByTestId('listing-card')
+  await expect(cards).toHaveCount(3)
+  await page.getByLabel('Sort by', { exact: true }).selectOption('nearest')
+  await expect(cards.first()).toContainText('Buffet lunch boxes')
+  await expect(cards.first()).toContainText('0 m away')
+  await expect(cards.nth(1)).toContainText('Chicken rice sets')
+  await expect(cards.nth(1)).toContainText('km away')
+  await expect(cards.nth(2)).toContainText('Salad bowls')
+})
+
+for (const width of [375, 1200]) {
+  test(`View on map opens the food map at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.route('https://www.onemap.gov.sg/maps/tiles/**', (route) => route.abort())
+    await page.route('**/rest/v1/listings*', (route) =>
+      route.fulfill({ json: [{ ...listings[0], lat: 1.2966, lng: 103.8502 }, listings[1]] }),
+    )
+    await page.goto('/#browse')
+    await page.getByRole('link', { name: 'View on map' }).click()
+    await expect(page).toHaveURL(/\/map$/)
+    await expect(page.getByRole('heading', { name: 'Food near you' })).toBeVisible()
+    await expect(page.getByTestId('nearby-map')).toBeVisible()
+    await expect(page.getByTestId('map-list-item')).toHaveCount(1)
+    await expect(page.getByText('1 without a map location')).toBeVisible()
+    await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+    // "Back to list" returns to the browse section.
+    await page.getByRole('button', { name: 'Back to list' }).click()
+    await expect(page.getByRole('heading', { name: 'Browse food' })).toBeVisible()
+  })
+}
