@@ -5,6 +5,7 @@ import Dashboard from '@/views/establishment/Dashboard.vue'
 import ListingFormView from '@/views/listings/ListingFormView.vue'
 import MyListingsView from '@/views/listings/MyListingsView.vue'
 import ListingDetailView from '@/views/listings/ListingDetailView.vue'
+import NearbyMapView from '@/views/listings/NearbyMapView.vue'
 import MyReservationsView from '@/views/reservations/MyReservationsView.vue'
 import { getCurrentUser } from '@/utils/session'
 
@@ -51,6 +52,11 @@ const router = createRouter({
       name: 'listing-form',
       component: ListingFormView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/map',
+      name: 'listings-map',
+      component: NearbyMapView,
     },
     {
       path: '/listings/:id',

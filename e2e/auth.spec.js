@@ -36,8 +36,10 @@ for (const role of ['User', 'Establishment']) {
       .fill('Test account')
     await page.getByLabel(emailLabel, { exact: true }).fill(user.email)
     // eslint-disable-next-line playwright/no-conditional-in-test -- this field exists only for establishments
-    if (role === 'Establishment')
+    if (role === 'Establishment') {
       await page.getByLabel('Establishment type', { exact: true }).selectOption('Restaurant')
+      await page.getByLabel('Pickup location', { exact: true }).fill('SMU, 81 Victoria Street')
+    }
     await page.getByLabel('Password', { exact: true }).fill('test-password')
     await page.getByLabel('Confirm password', { exact: true }).fill('test-password')
     await page.getByRole('button', { name: 'Create account', exact: true }).click()
@@ -46,7 +48,14 @@ for (const role of ['User', 'Establishment']) {
       .toEqual(
         role === 'User'
           ? { id: userId, name: 'Test account' }
-          : { id: userId, name: 'Test account', business_type: 'Restaurant' },
+          : {
+              id: userId,
+              name: 'Test account',
+              business_type: 'Restaurant',
+              address: 'SMU, 81 Victoria Street',
+              lat: null,
+              lng: null,
+            },
       )
   })
 }

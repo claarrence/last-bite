@@ -48,6 +48,22 @@ reach the browser:
   - Deployed: the Supabase Edge Function in supabase/functions/onemap,
     with the same two values set as function secrets.
 
+Address search is public so establishments can choose their pickup location
+while registering, before they have a session; it also works without OneMap
+credentials (OneMap returns results with a "token missing" warning). Dropping
+a pin on the map (reverse geocoding) still needs a login and the credentials.
+Redeploy the onemap function after pulling this change.
+
+Establishments choose a pickup location when registering (AuthView.vue). It
+is saved on their establishment row and pre-fills each new listing they post;
+they can still change it per listing. Accounts created before this have no
+saved location.
+
+The /map page (NearbyMapView.vue, "View on map" on the homepage) shows open
+listings as pins, nearest first once the browser shares a location, with an
+optional distance limit. "Nearest to me" on the homepage sorts the food grid
+by straight-line distance and shows it on each card.
+
 
 DATA STORE
 ----------
@@ -58,6 +74,8 @@ Reservations setup (Supabase dashboard -> SQL Editor):
   1. Run supabase/migrations/001_listings.sql if listings are not set up yet.
   2. Run supabase/migrations/002_reservations.sql.
   3. Run supabase/migrations/004_pickup_codes.sql for six-digit pickup numbers.
+  4. Run supabase/migrations/005_establishment_location.sql for the pickup
+     location establishments choose at registration.
 There is no 003 migration in this port: that belongs to the separate reviews
 feature. Existing pickup references remain valid after running 004.
 
@@ -80,8 +98,8 @@ booking records keep their agreed unit price. Closing a listing preserves its
 bookings; a listing with reservation records cannot be deleted.
 
 The listing detail page and food grid make bookings reachable. The homepage
-now has local search, type filters and pickup-deadline sorting. Reviews and
-browse map pins remain separate work.
+now has local search, type filters, pickup-deadline and distance sorting, and
+a link to the food map. Reviews remain separate work.
 No migrations are applied automatically by running the frontend.
 
 
@@ -107,11 +125,13 @@ Lint: pnpm lint
 PROJECT STRUCTURE
 -----------------
   src/views/        Route pages (HomeView, AuthView, establishment/Dashboard)
-                    listings/ListingDetailView, reservations/MyReservationsView
+                    listings/ListingDetailView, listings/NearbyMapView,
+                    reservations/MyReservationsView
   src/components/   Reusable UI (NavBar, BrandLogo, FoodVisual, AddressPicker,
                     LocationMap, PostFoodButton, AppToast)
   src/composables/  Shared logic (landing logo animation, toast messages)
-  src/utils/        Supabase client, session helpers, OneMap requests
+  src/utils/        Supabase client, session helpers, OneMap requests,
+                    map helpers (map.js: pins, bounds, distances)
   supabase/         OneMap Edge Function and listing/reservation migrations
   e2e/              Playwright tests
 

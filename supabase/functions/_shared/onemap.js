@@ -40,6 +40,19 @@ export function createOneMapHandler({ email, password, token, allowedOrigin = '*
   }
 
   async function requestApi(path, params, refresh = false) {
+    // Search still returns results without a token (alongside a "token missing" warning), so
+    // address autocomplete keeps working when no credentials are configured.
+    const hasCredentials = Boolean(token || (email && password))
+    if (path === 'common/elastic/search' && !hasCredentials) {
+      const response = await fetch(`https://www.onemap.gov.sg/api/${path}?${params}`, {
+        signal: AbortSignal.timeout(10000),
+      })
+      const data = await response.json()
+      if (!response.ok || !Array.isArray(data.results))
+        throw new Error('OneMap is not configured. Enter the pickup address manually.')
+      return data
+    }
+
     const authorization = await getToken(refresh)
     const response = await fetch(`https://www.onemap.gov.sg/api/${path}?${params}`, {
       headers: { Authorization: authorization },
