@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import LocationMap from '@/components/LocationMap.vue'
 import ReserveForm from '@/components/reservations/ReserveForm.vue'
 import ProviderReservations from '@/components/reservations/ProviderReservations.vue'
+import StatusUpdates from '@/components/status/StatusUpdates.vue'
 import { useListingActions } from '@/composables/useListingActions'
 import { getCurrentUser } from '@/utils/session'
 import { displayStatus, getListing, photoUrl } from '@/utils/listings'
@@ -15,6 +16,7 @@ import { quantityLevelLabel, UNKNOWN_ALLERGEN } from '@/utils/listingOptions'
 import { formatPickupWindow, formatPrice } from '@/utils/format'
 import { pickupCountdown } from '@/utils/countdown'
 import { listingCoords } from '@/utils/map'
+import { subscribeToListingUpdates, getListingUpdates, isVerifiedRecently } from '@/utils/statusUpdates'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
@@ -55,13 +57,37 @@ async function loadReservationInfo() {
   }
 }
 
+const updates = ref([])
+
+async function loadUpdates() {
+  try {
+    updates.value = await getListingUpdates(listing.value.id)
+  } catch {
+    updates.value = []
+  }
+}
+
+function addUpdate(update) {
+  if (updates.value.some((u) => u.id === update.id)) return
+  updates.value = [update, ...updates.value].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at),
+  )
+}
+
+let stopListening = null
+
 onMounted(async () => {
   try {
     userId.value = (await getCurrentUser())?.id ?? null
     listing.value = await getListing(props.id)
     if (!listing.value) error.value = 'This listing no longer exists.'
-    else if (listing.value.listing_type === 'discounted') {
-      await loadReservationInfo()
+    else {
+      const jobs = [loadUpdates()]
+      if (listing.value.listing_type === 'discounted') {
+        jobs.push(loadReservationInfo())
+      }
+      await Promise.all(jobs)
+      stopListening = subscribeToListingUpdates(listing.value.id, addUpdate)
     }
   } catch (err) {
     error.value = err.message
@@ -114,12 +140,16 @@ onMounted(() => {
 })
 onUnmounted(() => {
   clearInterval(timer)
+  stopListening?.()
 })
 
 const countdown = computed(() => {
   if (!listing.value || status.value !== 'open') return null
   return pickupCountdown(listing.value.pickup_start, listing.value.pickup_end, now.value)
 })
+
+const verified = computed(() => isVerifiedRecently(updates.value, now.value))
+const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
 </script>
 
 <template>
@@ -168,8 +198,15 @@ const countdown = computed(() => {
             class="countdown-chip"
             :class="{ 'is-urgent': countdown.urgent }"
             data-testid="detail-countdown"
-            >{{ countdown.label }}</span
-          >
+            >{{ countdown.label }}</span>
+          <span v-if="verified" class="badge rounded-pill badge-green" data-testid="verified-badge">
+            ✓ Verified recently
+          </span>
+        </div>
+
+        <div v-if="reportedGone" class="alert alert-secondary py-2 small" role="status">
+          Someone at the pickup spot reported this is all gone.
+          <template v-if="isOwner">You can delete this listing.</template>
         </div>
 
         <h1 class="display-6 page-title text-break" data-testid="detail-title">
@@ -280,6 +317,7 @@ const countdown = computed(() => {
             @reserved="onReserved"
           />
         </template>
+        <StatusUpdates :listing="listing" :user-id="userId" :updates="updates" :now="now" @posted="addUpdate" />
       </div>
     </article>
   </div>
