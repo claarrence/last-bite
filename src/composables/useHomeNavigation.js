@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const homeEntrance = ref(0)
@@ -22,8 +22,11 @@ export function useHomeNavigation() {
     const alreadyHome = router.currentRoute.value.name === 'home'
     if (!alreadyHome) homeEntrance.value++
     await router.push({ name: 'home' })
-    window.scrollTo({ top: 0, behavior: 'instant' })
     if (alreadyHome) homeEntrance.value++
+    await nextTick()
+    // Stop the previous smooth scroll after its compositor update reaches the page.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   return { homeHref, goHome, homeEntrance }

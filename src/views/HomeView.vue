@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
-import FoodVisual from '@/components/FoodVisual.vue'
+import HomeFoodScene from '@/components/HomeFoodScene.vue'
 import PostFoodButton from '@/components/PostFoodButton.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
@@ -13,8 +13,17 @@ import { vReveal } from '@/utils/reveal'
 
 const logo = ref(null)
 const navbar = ref(null)
+const foodScene = ref(null)
 const { homeHref, goHome, homeEntrance } = useHomeNavigation()
 const { active, navOpacity, logoStyle, foodStyle } = useLandingMotion(logo, navbar)
+
+// Replay the entrance without rebuilding the WebGL scene.
+watch(homeEntrance, () => {
+  for (const animation of foodScene.value.getAnimations()) {
+    animation.currentTime = 0
+    animation.play()
+  }
+})
 
 const listings = ref([])
 const loading = ref(true)
@@ -56,6 +65,7 @@ async function loadListings() {
   error.value = ''
   try {
     listings.value = await withRemainingPortions(await getAvailableListings())
+    now.value = new Date()
   } catch (err) {
     error.value = `Could not load listings: ${err.message}`
   } finally {
@@ -91,7 +101,9 @@ onUnmounted(() => clearInterval(timer))
           >
         </div>
       </div>
-      <div :key="homeEntrance" class="hero-food page-enter" :style="foodStyle"><FoodVisual /></div>
+      <div ref="foodScene" class="hero-food page-enter" :style="foodStyle">
+        <HomeFoodScene />
+      </div>
     </header>
     <div v-if="active" class="logo-flight" :style="logoStyle" aria-hidden="true">
       <span :key="homeEntrance" class="logo-arrival page-enter"><BrandLogo /></span>
@@ -243,7 +255,13 @@ onUnmounted(() => clearInterval(timer))
   height: var(--logo-icon-size);
 }
 .hero-food {
+  max-width: 420px;
   will-change: transform;
+}
+@media (max-width: 767px) {
+  .hero-food {
+    width: 280px;
+  }
 }
 .browse-search {
   position: relative;
