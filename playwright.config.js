@@ -1,6 +1,8 @@
 import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
+import dotenv from 'dotenv'
 
+dotenv.config()
 const isCI = !!process.env.CI
 
 export default defineConfig({
