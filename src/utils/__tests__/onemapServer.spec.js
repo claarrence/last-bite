@@ -61,8 +61,22 @@ describe('server-side OneMap adapter', () => {
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe('renewed-token')
   })
 
-  it('shows a configuration error instead of claiming there were no matching addresses', async () => {
+  it('searches without a token when no credentials are configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({
+        error: 'Authentication token missing.',
+        results: [{ ADDRESS: '640 ROWELL ROAD', LATITUDE: '1.3074', LONGITUDE: '103.8547' }],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
     const response = await createOneMapHandler()(request())
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('640 ROWELL ROAD')
+    expect(fetchMock.mock.calls[0][1].headers).toBeUndefined()
+  })
+
+  it('shows a configuration error for map pins when no credentials are configured', async () => {
+    const response = await createOneMapHandler()(request('mode=reverse&lat=1.35&lng=103.85'))
     expect(response.status).toBe(503)
     expect((await response.json()).error).toContain('not configured')
   })
@@ -112,32 +126,47 @@ describe('deployed OneMap function authentication', () => {
     return handler
   }
 
-  it('rejects an invalid session before calling OneMap', async () => {
+  const pinLookup = 'mode=reverse&lat=1.3197&lng=103.8426'
+
+  it('rejects an invalid session before a pin lookup calls OneMap', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ error: 'invalid session' }, 401))
     vi.stubGlobal('fetch', fetchMock)
     const handle = await loadFunction()
-    const response = await handle(request())
+    const response = await handle(request(pinLookup))
     expect(response.status).toBe(401)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('https://test.supabase.co/auth/v1/user')
   })
 
-  it('passes an authenticated request to OneMap without exposing its token', async () => {
+  it('passes an authenticated pin lookup to OneMap without exposing its token', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(json({ id: 'test-user' }))
-      .mockResolvedValueOnce(json({ results: [] }))
+      .mockResolvedValueOnce(json({ GeocodeInfo: [] }))
     vi.stubGlobal('fetch', fetchMock)
     const handle = await loadFunction()
     const response = await handle(
-      new Request('https://test.supabase.co/functions/v1/onemap?mode=search&query=307987', {
+      new Request(`https://test.supabase.co/functions/v1/onemap?${pinLookup}`, {
         headers: { Authorization: 'Bearer test-user-session' },
       }),
     )
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ results: [] })
+    expect(await response.json()).toEqual({ GeocodeInfo: [] })
     expect(fetchMock.mock.calls[0][1].headers.apikey).toBe('test-publishable')
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer test-user-session')
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('test-token')
+  })
+
+  // Establishments search for their location while registering, before they are logged in.
+  it('lets logged-out visitors search addresses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ results: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const handle = await loadFunction()
+    const response = await handle(request())
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      'https://www.onemap.gov.sg/api/common/elastic/search',
+    )
   })
 })

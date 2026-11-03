@@ -15,6 +15,9 @@ const handler = createOneMapHandler({
 // Validate the user's session through Supabase Auth, including with new publishable keys.
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return handler(request)
+  // Establishments choose their location while registering, before they have a session, so
+  // address search is public. Reverse geocoding (map pin lookups) still requires a login.
+  if (new URL(request.url).searchParams.get('mode') === 'search') return handler(request)
   const authorization = request.headers.get('authorization') || ''
   const cors = {
     'Access-Control-Allow-Origin': Deno.env.get('ONEMAP_ALLOWED_ORIGIN') || '*',

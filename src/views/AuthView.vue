@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BrandLogo from '@/components/BrandLogo.vue'
 import FoodVisual from '@/components/FoodVisual.vue'
+import AddressPicker from '@/components/AddressPicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,8 +30,28 @@ const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const businessType = ref('')
+// Establishment pickup location. Coordinates are set only when a OneMap result is picked;
+// a typed address is still accepted, matching the listing form.
+const address = ref('')
+const lat = ref(null)
+const lng = ref(null)
+const addressError = ref('')
 
 const registeredMessage = ref('')
+
+function onAddressSelect(result) {
+  address.value = result.address
+  lat.value = result.lat
+  lng.value = result.lng
+  addressError.value = ''
+}
+
+// Editing the text again means the old coordinates no longer match it.
+function onAddressClear() {
+  lat.value = null
+  lng.value = null
+  addressError.value = ''
+}
 
 function resetForm() {
   showPassword.value = false
@@ -39,6 +60,8 @@ function resetForm() {
   password.value = ''
   confirmPassword.value = ''
   businessType.value = ''
+  address.value = ''
+  onAddressClear()
   registeredMessage.value = ''
 }
 
@@ -52,6 +75,10 @@ function validateInput() {
   }
   if (role.value === 'establishment' && mode.value === 'register') {
     if (!businessType.value) return false
+    if (!address.value.trim()) {
+      addressError.value = 'Enter your pickup location.'
+      return false
+    }
   }
 
   return true
@@ -71,6 +98,9 @@ async function register() {
   const profile = { id: data.user.id, name: name.value }
   if (role.value === 'establishment') {
     profile.business_type = businessType.value
+    profile.address = address.value.trim()
+    profile.lat = lat.value
+    profile.lng = lng.value
   }
   const { error: profileError } = await supabase.from(profileTable.value).insert(profile)
   if (profileError) {
@@ -207,6 +237,17 @@ async function login() {
                 <option>Restaurant</option>
                 <option>Event Organiser</option>
               </select>
+            </div>
+            <div v-if="mode === 'register' && role === 'establishment'" class="auth-field address-field">
+              <label for="auth-address" class="form-label">Pickup location</label>
+              <AddressPicker id="auth-address" v-model="address" :invalid="!!addressError"
+                :pinned="lat != null && lng != null" placeholder="Search an address or postal code"
+                @select="onAddressSelect" @clear="onAddressClear">
+                <template #feedback>
+                  <div class="invalid-feedback">{{ addressError }}</div>
+                </template>
+              </AddressPicker>
+              <div class="form-text">Used as the default location when you post food.</div>
             </div>
             <div class="auth-field">
               <label for="auth-password" class="form-label">Password</label>
@@ -412,20 +453,28 @@ async function login() {
   animation: field-arrive 250ms ease both;
 }
 
+/* Each animated field is its own stacking layer, so lift this one to keep its
+   suggestions list above the fields below it. */
+.address-field {
+  position: relative;
+  z-index: 2;
+}
+
 .auth-form .form-label {
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
-.auth-form .form-control,
+/* :deep reaches the address picker's input, which lives in a child component. */
+.auth-form :deep(.form-control),
 .auth-form .form-select {
   min-height: 46px;
   background-color: #fdfbf7;
   font-size: 14px;
 }
 
-.auth-form .form-control:focus {
+.auth-form :deep(.form-control:focus) {
   background-color: var(--color-paper);
 }
 
