@@ -16,11 +16,25 @@
   --bs-link-hover-color: #873325;
 }
 html {
-  scroll-behavior: smooth;
   scroll-padding-top: 100px;
+  scrollbar-gutter: stable;
 }
 body {
   font-family: Arial, sans-serif;
+}
+.page-enter {
+  animation: page-rise 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/* Transform the artwork without moving the page layout. */
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    translate: 0 24px;
+  }
+}
+.page-content {
+  /* Keep the footer below the first screen while route data arrives. */
+  min-height: calc(100svh - 205px);
 }
 ::selection {
   background: #e9b49d80;
@@ -106,8 +120,11 @@ a {
   align-items: center;
   gap: 10px;
   color: var(--color-ink);
+  font-family: Georgia, serif;
   font-size: 26px;
-  font-weight: 700;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 .brand-logo svg {
@@ -156,13 +173,11 @@ a {
   grid-template-columns: 1.2fr 1fr;
   align-items: center;
   gap: 40px;
-  padding-top: 64px;
-  padding-bottom: 80px;
+  padding-top: 40px;
+  padding-bottom: 48px;
 }
 .hero-brand .brand-logo {
-  font-family: Georgia, serif;
-  font-size: clamp(54px, 7.6vw, 104px);
-  font-weight: 400;
+  font-size: clamp(54px, 7.6vw, 96px);
   letter-spacing: -5px;
   gap: 18px;
 }
@@ -203,7 +218,8 @@ a {
   transform: translate(3px, -3px);
 }
 .hero-food {
-  max-width: 410px;
+  width: 100%;
+  max-width: 320px;
   justify-self: end;
 }
 .browse-section {
@@ -216,19 +232,6 @@ a {
   font-size: 36px;
   font-weight: 400;
   letter-spacing: -1px;
-}
-.browse-search {
-  width: min(100%, 320px);
-}
-.browse-search .form-control {
-  background: var(--color-paper);
-  border-radius: 30px;
-  padding: 12px 18px;
-  font-size: 13px;
-}
-#browse .rounded-pill {
-  padding: 10px 17px;
-  font-size: 12px;
 }
 .listing-card {
   border: 1px solid var(--color-line);
@@ -267,18 +270,12 @@ a {
   background: transparent;
   color: #873325;
 }
-.listing-info,
 .dashboard-intro,
 .empty-listings {
   background: var(--color-paper);
   padding: 28px;
   border: 1px solid var(--color-line);
   border-radius: 20px;
-}
-.listing-info p {
-  color: var(--color-muted);
-  line-height: 1.7;
-  font-size: 14px;
 }
 form[data-testid='listing-form'] {
   padding: 24px;
@@ -369,6 +366,7 @@ footer {
 }
 .site-footer {
   align-items: center;
+  padding-inline-end: 100px;
   /* Room for the floating + button, so it never covers the footer links. */
   padding-bottom: 96px;
 }
@@ -409,9 +407,9 @@ footer {
 @media (max-width: 767px) {
   .home-hero {
     grid-template-columns: 1fr;
-    padding-top: 40px;
-    padding-bottom: 48px;
-    gap: 32px;
+    padding-top: 24px;
+    padding-bottom: 32px;
+    gap: 24px;
   }
   .hero-brand {
     text-align: center;
@@ -427,7 +425,7 @@ footer {
     gap: 24px;
   }
   .hero-food {
-    width: 265px;
+    width: 220px;
     max-width: 80%;
     justify-self: center;
   }
@@ -439,9 +437,6 @@ footer {
   }
 }
 @media (max-width: 575px) {
-  .browse-search {
-    width: 100%;
-  }
   .app-navbar .navbar-nav {
     gap: 8px;
     padding-top: 16px;
@@ -465,6 +460,7 @@ footer {
   .app-navbar .nav-link::after {
     transition: none;
   }
+  .page-enter,
   .app-navbar .navbar-collapse.show {
     animation: none;
   }
