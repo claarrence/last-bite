@@ -315,11 +315,8 @@ src/stores/filters.js, so a filter chosen on one page still applies on the other
     and "Available now" (pickup window has already started).
   - A listing must have every ticked dietary tag, so Halal + Vegetarian shows
     only food that is both.
-  - Each active filter appears as a removable tag (FilterTag.vue); "Clear all"
-    resets them. FilterBar.vue holds the checkboxes and tags on both pages.
-  - Filters are saved in localStorage (key lastbite-filters) and survive a page
-    refresh. The sort order is not saved, so "Nearest to me" never asks for the
-    user's location as soon as the page opens.
+  - Each active filter appears as a removable tag (FilterTag.vue). FilterBar.vue
+    holds the checkboxes and tags on both pages.
   - The map list has its own sort: nearest first, or pickup ending soon.
 
 Store: state (query, foodType, selectedDietary, availableNow, sortBy), a getter
@@ -349,13 +346,17 @@ Search and filters (Ryan Lee): Claude (Anthropic's AI assistant, used through
 Claude Code) explained the Vue and Pinia concepts, reviewed code and wrote
 parts of this feature.
   Written by Ryan, with AI explanations and hints:
-    - The filters store's state (query, foodType, selectedDietary,
-      availableNow, sortBy).
-    - The food-type check in matchesFunction, clearAllFunction, and the
-      food-type, search and dietary tags in activeTagsComputed.
-    - The "Available now" checkbox binding.
-  Written by AI (setup, markup, styling and tests, which the course allows):
+    - The filters store (src/stores/filters.js): its state, matchesFunction,
+      activeTagsComputed, removeTagFunction and clearAllFunction.
+    - FilterTag.vue's label prop and remove event; FilterBar.vue's checkbox
+      bindings and chips row.
+    - Connecting the homepage (HomeView.vue) to the store and adding FilterBar.
+  Written by AI:
     - Installing Pinia and registering it in main.js.
     - The HTML, Bootstrap classes and CSS of FilterBar.vue and FilterTag.vue.
-    - The map's distance menu width fix (CSS).
+    - Connecting the map page (NearbyMapView.vue) to the store and adding
+      FilterBar, repeating the homepage wiring Ryan wrote, and the map list's
+      "Pickup ending soon" sort (Ryan added its menu and mapSort ref).
+    - The map's control row layout fixes (CSS: distance menu width, wrapping
+      on phones).
     - src/stores/__tests__/filters.spec.js and e2e/filters.spec.js.
