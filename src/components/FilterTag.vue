@@ -2,19 +2,23 @@
 // A removable chip for one active filter, e.g. "Halal ✕".
 // The parent passes in the text to show and decides what removing it means.
 
+// TODO (Ryan): declare a 'label' prop (Wk6 defineProps)
 defineProps({
-  // Text shown on the chip, e.g. "Halal"
-  label: { type: String, required: true },
+  label: String,
 })
+
+// TODO (Ryan): declare a 'remove' event (Wk6 defineEmits)
+
 const emit = defineEmits(['remove'])
 </script>
 
 <template>
+  <!-- TODO (Ryan): emit 'remove' when this button is clicked -->
   <button
     type="button"
+    @click="emit('remove')"
     class="filter-tag btn btn-sm"
     :aria-label="`Remove filter: ${label}`"
-    @click="emit('remove')"
   >
     {{ label }}
     <span class="ms-1" aria-hidden="true">✕</span>
