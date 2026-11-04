@@ -347,7 +347,6 @@ parts of this feature.
     - The food-type check in matchesFunction, clearAllFunction, and the
       food-type, search and dietary tags in activeTagsComputed.
     - The "Available now" checkbox binding.
-  Written by AI:
     - The search, dietary and "Available now" checks in matchesFunction; the
       "Available now" tag; removeTagFunction.
     - FilterTag.vue and FilterBar.vue (including the dietary checkbox binding).
