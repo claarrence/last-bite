@@ -1,54 +1,21 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-
-const STORAGE_KEY = 'lastbite-filters'
-
-// Filters saved by an earlier visit, or {} if there are none. localStorage only stores
-// strings, so they are saved as JSON text. It can also be blocked (e.g. private browsing).
-function loadSavedFilters() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {}
-  } catch {
-    return {}
-  }
-}
+import { select } from 'three/tsl'
 
 export const useFiltersStore = defineStore('filters', () => {
-  // state: one ref per filter, starting from the saved filters when there are any
-  const saved = loadSavedFilters()
+  // state: one ref per filter
 
   // search term
-  const query = ref(typeof saved.query === 'string' ? saved.query : '')
-  // does not filter out listings, just decides which order they appear in.
-  // Not saved: "Nearest to me" would ask for the user's location as soon as the page opens.
+  const query = ref('')
+  // does not filter out listings, just decides which order they appear in
   const sortBy = ref('newest')
 
   // tags
-  const foodType = ref(['free', 'discounted'].includes(saved.foodType) ? saved.foodType : 'all')
-  const selectedDietary = ref(Array.isArray(saved.selectedDietary) ? saved.selectedDietary : [])
-  const availableNow = ref(saved.availableNow === true)
+  const foodType = ref('all')
+  const selectedDietary = ref([])
+  const availableNow = ref(false)
 
-  // Save whenever a filter changes, so they survive a page refresh.
-  // `deep` so ticking a checkbox (which changes the array's contents) also counts.
-  watch(
-    [query, foodType, selectedDietary, availableNow],
-    () => {
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            query: query.value,
-            foodType: foodType.value,
-            selectedDietary: selectedDietary.value,
-            availableNow: availableNow.value,
-          }),
-        )
-      } catch {
-        // Storage is full or blocked: the filters still work, they just won't be remembered.
-      }
-    },
-    { deep: true },
-  )
+  // TODO (Ryan, step 10, optional): save the filters to localStorage and load them back
 
   function matchesFunction(listing, now) {
     // Food type: say no if the user picked a type and this listing is a different type
@@ -56,21 +23,26 @@ export const useFiltersStore = defineStore('filters', () => {
       return false
     }
 
-    // Search: say no if the typed text isn't in the title, address or description
-    const search = query.value.trim().toLowerCase()
-    const details = `${listing.title} ${listing.address} ${listing.description || ''}`.toLowerCase()
-    if (!details.includes(search)) {
+    // TODO (Ryan): search check
+    const trimLowerQuery = query.value.trim().toLowerCase()
+    const listingDetails = ` ${listing.title} ${listing.address} ${listing.description || ''}`
+      .toLowerCase()
+      .trim()
+    if (!listingDetails.includes(trimLowerQuery)) {
       return false
     }
 
-    // Dietary: say no unless the listing has every tag the user ticked
-    const listingTags = listing.dietary_tags ?? []
-    if (!selectedDietary.value.every((tag) => listingTags.includes(tag))) {
-      return false
+    // TODO (Ryan): dietary check
+    const listingTags = listing.dietary_tags || []
+    for (const tag of selectedDietary.value) {
+      if (!listingTags.includes(tag)) {
+        return false
+      }
     }
 
-    // Available now: say no if the toggle is on and pickup hasn't started yet
-    if (availableNow.value && new Date(listing.pickup_start) > now) {
+    // TODO (Ryan): "Available now" check
+
+    if (availableNow.value == true && new Date(listing.pickup_start) > now) {
       return false
     }
 
@@ -104,21 +76,21 @@ export const useFiltersStore = defineStore('filters', () => {
       }
     }
 
-    if (availableNow.value) {
+    // TODO (Ryan): "Available now" tag
+    if (availableNow.value == true) {
       tags.push({ filter: 'availableNow', label: 'Available now' })
     }
 
     return tags
   })
 
-  // Turns off the one filter a tag stands for; other ticked dietary options stay ticked
   function removeTagFunction(tag) {
-    if (tag.filter === 'foodType') foodType.value = 'all'
-    if (tag.filter === 'query') query.value = ''
-    if (tag.filter === 'availableNow') availableNow.value = false
-    if (tag.filter === 'selectedDietary') {
+    // TODO (Ryan): turn off the one filter this tag stands for
+    if (tag.filter == 'foodType') foodType.value = 'all'
+    if (tag.filter == 'query') query.value = ''
+    if (tag.filter == 'availableNow') availableNow.value = false
+    if (tag.filter == 'selectedDietary')
       selectedDietary.value = selectedDietary.value.filter((t) => t !== tag.label)
-    }
   }
 
   return {
