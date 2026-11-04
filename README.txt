@@ -5,7 +5,7 @@ Last Bite connects people in Singapore with surplus food: free leftovers from
 events and buffets, and discounted end-of-day food from outlets, so less of it
 goes to waste.
 
-Built with Vue 3 (Vite), Vue Router, Bootstrap 5, Axios, Supabase and OneMap.
+Built with Vue 3 (Vite), Vue Router, Pinia, Bootstrap 5, Axios, Supabase and OneMap.
 
 
 LIVE APPLICATION
@@ -60,9 +60,11 @@ they can still change it per listing. Accounts created before this have no
 saved location.
 
 The /map page (NearbyMapView.vue, "View on map" on the homepage) shows open
-listings as pins, nearest first once the browser shares a location, with an
-optional distance limit. "Nearest to me" on the homepage sorts the food grid
-by straight-line distance and shows it on each card.
+listings as pins, nearest first once the browser shares a location (or sorted
+by pickup deadline), with an optional distance limit. It applies the same
+filters as the homepage (see SEARCH AND FILTERS). "Nearest to me" on the
+homepage sorts the food grid by straight-line distance and shows it on each
+card.
 
 
 DATA STORE
@@ -145,6 +147,9 @@ End-to-end tests (Playwright):
   pnpm exec playwright install      (first time only, downloads browsers)
   pnpm test:e2e
 The E2E tests mock Supabase responses, so no real accounts are created.
+Search and filter tests (store logic, then Browse/map journeys in all three browsers):
+  pnpm test:unit --run src/stores
+  pnpm exec playwright test filters.spec.js
 Reservation regression tests:
   pnpm test:unit --run
   pnpm exec playwright test reservations.spec.js --project=chromium
@@ -162,7 +167,9 @@ PROJECT STRUCTURE
                     listings/ListingDetailView, listings/NearbyMapView,
                     reservations/MyReservationsView
   src/components/   Reusable UI (NavBar, BrandLogo, FoodVisual, AddressPicker,
-                    LocationMap, PostFoodButton, AppToast)
+                    LocationMap, PostFoodButton, AppToast, FilterBar, FilterTag)
+  src/stores/       Pinia stores (filters.js: search and filters shared by
+                    the homepage and the map)
   src/composables/  Shared logic (landing logo animation, toast messages)
   src/utils/        Supabase client, session helpers, OneMap requests,
                     map helpers (map.js: pins, bounds, distances)
@@ -172,8 +179,8 @@ PROJECT STRUCTURE
 
 THIRD-PARTY LIBRARIES
 ---------------------
-Vue, Vue Router, Bootstrap, Axios, Supabase JS, Leaflet (maps) and Three.js
-(homepage rendering). All are free,
+Vue, Vue Router, Pinia (shared state), Bootstrap, Axios, Supabase JS, Leaflet
+(maps) and Three.js (homepage rendering). All are free,
 open-source libraries installed through pnpm (see package.json).
 
 
@@ -251,15 +258,39 @@ have been removed. The compact food illustration, shared badge colours and
 Bootstrap controls keep the browse grid prominent. Footer links reserve room
 for the floating posting button.
 
-Search uses title, pickup address and description. Food-type buttons combine
-with search; results can keep the backend's newest-first order or sort by pickup
+Search, food type, dietary tags and "Available now" combine (see SEARCH AND
+FILTERS); results can keep the backend's newest-first order or sort by pickup
 deadline. Expired/closed listings are excluded, and countdowns refresh every
-30 seconds (the interval is removed on leaving Home). Clear filters resets the
-search and food type. Empty results offer a clear action, without example data.
+30 seconds (the interval is removed on leaving Home). Empty results offer a
+clear action, without example data.
 
-Data flow: input/button -> Vue ref -> computed filtered/sorted list -> existing
-ListingCard components. Supabase remains the source of listings and reservation
-stock. Browser checks use mocked data; they do not add real food or reservations.
+Data flow: input/button -> filters store -> computed filtered/sorted list ->
+existing ListingCard components. Supabase remains the source of listings and
+reservation stock. Browser checks use mocked data; they do not add real food or
+reservations.
+
+
+SEARCH AND FILTERS
+------------------
+Owner: Ryan Lee.
+
+The homepage (Browse food) and the /map page share one Pinia store,
+src/stores/filters.js, so a filter chosen on one page still applies on the other:
+  - Search (title, pickup address, description), food type (All / Free buffet /
+    Reservation food), dietary tags (Halal, Vegetarian, Vegan, No pork/no lard)
+    and "Available now" (pickup window has already started).
+  - A listing must have every ticked dietary tag, so Halal + Vegetarian shows
+    only food that is both.
+  - Each active filter appears as a removable tag (FilterTag.vue); "Clear all"
+    resets them. FilterBar.vue holds the checkboxes and tags on both pages.
+  - Filters are saved in localStorage (key lastbite-filters) and survive a page
+    refresh. The sort order is not saved, so "Nearest to me" never asks for the
+    user's location as soon as the page opens.
+  - The map list has its own sort: nearest first, or pickup ending soon.
+
+Store: state (query, foodType, selectedDietary, availableNow, sortBy), a getter
+(activeTagsComputed) and actions (matchesFunction, removeTagFunction,
+clearAllFunction), following the Week 11 Pinia slides.
 
 The homepage's 3D food scene is isolated in src/components/HomeFoodScene.vue.
 Three.js loads on Home only, then WebGL renders curved porcelain plates,
@@ -303,3 +334,24 @@ Map bounds and listing coordinates share src/utils/map.js. Home and My Listings
 share the page-enter CSS animation. Unused map factories, reservation lookup,
 loader variants and duplicate CSS have been removed. No packages or database
 rules were changed by this cleanup.
+
+
+USE OF AI / LLM
+---------------
+Search and filters (Ryan Lee): Claude (Anthropic's AI assistant, used through
+Claude Code) explained the Vue and Pinia concepts, reviewed code and wrote
+parts of this feature.
+  Written by Ryan, with AI explanations and hints:
+    - The filters store's state (query, foodType, selectedDietary,
+      availableNow, sortBy).
+    - The food-type check in matchesFunction, clearAllFunction, and the
+      food-type, search and dietary tags in activeTagsComputed.
+    - The "Available now" checkbox binding.
+  Written by AI:
+    - The search, dietary and "Available now" checks in matchesFunction; the
+      "Available now" tag; removeTagFunction.
+    - FilterTag.vue and FilterBar.vue (including the dietary checkbox binding).
+    - Connecting HomeView.vue and NearbyMapView.vue to the store, the map's
+      sort menu and "Clear filters" empty state, and the distance menu width fix.
+    - Saving filters to localStorage.
+    - src/stores/__tests__/filters.spec.js and e2e/filters.spec.js.
