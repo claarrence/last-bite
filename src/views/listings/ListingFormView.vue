@@ -537,8 +537,12 @@ async function submit() {
               @clear="onAddressClear"
               @results="searchResults = $event"
             >
+              <!-- Added only when needed: WebKit does not re-lay-out a feedback element that
+                   is revealed by the input's .is-invalid class, so Safari would keep it hidden. -->
               <template #feedback>
-                <div class="invalid-feedback">{{ fieldError('address') }}</div>
+                <div v-if="fieldError('address')" class="invalid-feedback d-block">
+                  {{ fieldError('address') }}
+                </div>
               </template>
             </AddressPicker>
             <div class="form-text">

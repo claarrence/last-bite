@@ -243,8 +243,10 @@ async function login() {
               <AddressPicker id="auth-address" v-model="address" :invalid="!!addressError"
                 :pinned="lat != null && lng != null" placeholder="Search an address or postal code"
                 @select="onAddressSelect" @clear="onAddressClear">
+                <!-- Added only when needed: WebKit does not re-lay-out a feedback element that
+                     is revealed by the input's .is-invalid class, so Safari would keep it hidden. -->
                 <template #feedback>
-                  <div class="invalid-feedback">{{ addressError }}</div>
+                  <div v-if="addressError" class="invalid-feedback d-block">{{ addressError }}</div>
                 </template>
               </AddressPicker>
               <div class="form-text">Used as the default location when you post food.</div>
