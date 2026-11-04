@@ -50,37 +50,162 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   try {
     // Load the renderer only on Home, after the page has mounted.
-    const [THREE, { RoundedBoxGeometry }] = await Promise.all([
+    const [THREE, { RoundedBoxGeometry }, { RoomEnvironment }] = await Promise.all([
       import('three'),
       import('three/addons/geometries/RoundedBoxGeometry.js'),
+      import('three/addons/environments/RoomEnvironment.js'),
     ])
     if (disposed) return
+    // Wait for the food photos so the plates never render empty.
+    const loader = new THREE.TextureLoader()
+    const [saladPhoto, mealPhoto, buffetPhoto] = await Promise.all(
+      photos.map((photo) => loader.loadAsync(`/images/${photo}.jpg`)),
+    )
+    for (const photo of [saladPhoto, mealPhoto, buffetPhoto]) {
+      photo.colorSpace = THREE.SRGBColorSpace
+      resources.add(photo)
+    }
+    if (disposed) return disposeScene()
+
     renderer = new THREE.WebGLRenderer({ canvas: canvas.value, alpha: true, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    // Neutral tone mapping keeps the photo colours true; anisotropy keeps them sharp at an angle.
+    renderer.toneMapping = THREE.NeutralToneMapping
+    renderer.shadowMap.enabled = true
+    const anisotropy = renderer.capabilities.getMaxAnisotropy()
 
     const scene = new THREE.Scene()
+    // A soft studio environment gives the porcelain and tomatoes believable reflections.
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    const room = new RoomEnvironment()
+    scene.environment = pmrem.fromScene(room, 0.04).texture
+    scene.environmentIntensity = 0.8
+    resources.add(scene.environment)
+    room.dispose()
+    pmrem.dispose()
+
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 40)
     camera.position.set(0, 6.1, 6.6)
     camera.lookAt(0, 0, 0)
     const world = new THREE.Group()
     world.position.y = 0.3
     scene.add(world)
-    scene.add(new THREE.HemisphereLight(0xfffdf9, 0xb7a18b, 1.8))
-    const light = new THREE.DirectionalLight(0xfff2de, 2.2)
+    scene.add(new THREE.HemisphereLight(0xfffdf9, 0xb7a18b, 0.5))
+    const light = new THREE.DirectionalLight(0xfff2de, 2)
     light.position.set(-3, 7, 5)
+    light.castShadow = true
+    light.shadow.mapSize.set(1024, 1024)
+    light.shadow.radius = 6
+    light.shadow.bias = -0.0005
+    light.shadow.normalBias = 0.02
+    Object.assign(light.shadow.camera, { left: -3.6, right: 3.6, top: 3.6, bottom: -3.6, far: 20 })
     scene.add(light)
 
     // Reuse geometry and materials; all objects belong to this one scene.
-    function addMesh(geometry, material, parent = world, count = 0) {
+    function addMesh(geometry, material, parent = world, shadows = true, count = 0) {
       resources.add(geometry)
       resources.add(material)
       const mesh = count
         ? new THREE.InstancedMesh(geometry, material, count)
         : new THREE.Mesh(geometry, material)
+      mesh.castShadow = mesh.receiveShadow = shadows
       parent.add(mesh)
       return mesh
     }
+
+    // Point a texture at one region of its photo: [centre u, centre v, radius u, radius v].
+    function cropPhoto(texture, [u, v, radiusU, radiusV]) {
+      texture.repeat.set(radiusU * 2, radiusV * 2)
+      texture.offset.set(u - radiusU, v - radiusV)
+      texture.anisotropy = anisotropy
+      resources.add(texture)
+      return texture
+    }
+
+    // An unsharp mask: push each pixel away from a blurred copy so food edges stay crisp.
+    function sharpen(canvas, amount) {
+      const { width, height } = canvas
+      const blurred = document.createElement('canvas')
+      blurred.width = width
+      blurred.height = height
+      const blurContext = blurred.getContext('2d')
+      blurContext.filter = 'blur(2px)'
+      blurContext.drawImage(canvas, 0, 0)
+      const soft = blurContext.getImageData(0, 0, width, height).data
+      const context = canvas.getContext('2d')
+      const image = context.getImageData(0, 0, width, height)
+      const pixels = image.data
+      for (let i = 0; i < pixels.length; i++)
+        if (i % 4 !== 3) pixels[i] += (pixels[i] - soft[i]) * amount
+      context.putImageData(image, 0, 0)
+    }
+
+    // Copy a dish out of its photo and darken the edge, so the food sits down inside the plate.
+    function dishTexture(photo, [u, v, radiusU, radiusV]) {
+      const size = 1024
+      const dish = document.createElement('canvas')
+      dish.width = dish.height = size
+      const context = dish.getContext('2d')
+      const { width, height } = photo.image
+      context.filter = 'contrast(1.08) saturate(1.15)'
+      context.drawImage(
+        photo.image,
+        (u - radiusU) * width,
+        (1 - v - radiusV) * height,
+        radiusU * 2 * width,
+        radiusV * 2 * height,
+        0,
+        0,
+        size,
+        size,
+      )
+      context.filter = 'none'
+      sharpen(dish, 0.9)
+      const shade = context.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        size / 2,
+      )
+      shade.addColorStop(0.55, 'rgba(45, 28, 18, 0)')
+      shade.addColorStop(0.85, 'rgba(45, 28, 18, 0.18)')
+      shade.addColorStop(1, 'rgba(45, 28, 18, 0.6)')
+      // A blurred grey copy becomes the height map; it fades to zero at the edge so the rim stays down.
+      const heightCanvas = document.createElement('canvas')
+      heightCanvas.width = heightCanvas.height = 256
+      const heightContext = heightCanvas.getContext('2d')
+      heightContext.filter = 'grayscale(1) blur(4px)'
+      heightContext.drawImage(dish, 0, 0, 256, 256)
+      heightContext.filter = 'none'
+      const fade = heightContext.createRadialGradient(128, 128, 0, 128, 128, 128)
+      fade.addColorStop(0.6, 'rgba(0, 0, 0, 0)')
+      fade.addColorStop(0.98, 'rgba(0, 0, 0, 1)')
+      heightContext.fillStyle = fade
+      heightContext.fillRect(0, 0, 256, 256)
+
+      context.fillStyle = shade
+      context.fillRect(0, 0, size, size)
+      const map = new THREE.CanvasTexture(dish)
+      map.colorSpace = THREE.SRGBColorSpace
+      map.anisotropy = anisotropy
+      const relief = new THREE.CanvasTexture(heightCanvas)
+      resources.add(map)
+      resources.add(relief)
+      return { map, relief }
+    }
+
+    // An invisible floor that only shows the soft shadows under the plates and garnish.
+    const ground = addMesh(
+      new THREE.CircleGeometry(3.4, 48),
+      new THREE.ShadowMaterial({ opacity: 0.16 }),
+      world,
+      false,
+    )
+    ground.rotation.x = -Math.PI / 2
+    ground.position.y = -0.01
+    ground.receiveShadow = true
 
     // Rotate this short cross-section to form a curved porcelain plate.
     const profile = [
@@ -99,10 +224,11 @@ onMounted(async () => {
       profile.map(([x, y]) => new THREE.Vector2(x, y)),
       64,
     )
-    const porcelain = new THREE.MeshStandardMaterial({
-      color: 0xfff9ed,
-      roughness: 0.28,
-      metalness: 0.05,
+    const porcelain = new THREE.MeshPhysicalMaterial({
+      color: 0xf4eee4,
+      roughness: 0.35,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
     })
     const ringGeometry = new THREE.TorusGeometry(1, 0.003, 6, 96)
     const ringMaterial = new THREE.MeshBasicMaterial({
@@ -112,63 +238,197 @@ onMounted(async () => {
       depthWrite: false,
     })
     for (const radius of [2.25, 2.42]) {
-      const ring = addMesh(ringGeometry, ringMaterial)
+      const ring = addMesh(ringGeometry, ringMaterial, world, false)
       ring.rotation.x = -Math.PI / 2
       ring.scale.setScalar(radius)
     }
 
-    const tofuGeometry = new RoundedBoxGeometry(0.34, 0.34, 0.34, 2, 0.045)
-    const tofuMaterial = new THREE.MeshStandardMaterial({ color: 0xca8539, roughness: 0.65 })
-    const tomatoGeometry = new THREE.SphereGeometry(0.18, 20, 12)
-    const tomatoMaterial = new THREE.MeshStandardMaterial({ color: 0xd74e30, roughness: 0.35 })
+    // Ingredients use textures cut from the same photos: seared tofu and lettuce.
+    const tofuGeometry = new RoundedBoxGeometry(0.34, 0.34, 0.34, 3, 0.05)
+    const tofuPhoto = cropPhoto(saladPhoto.clone(), [0.522, 0.636, 0.055, 0.055])
+    const tofuMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfbe6c8,
+      map: tofuPhoto,
+      bumpMap: tofuPhoto,
+      bumpScale: 3,
+      roughness: 0.6,
+    })
+    const tomatoGeometry = new THREE.SphereGeometry(0.18, 32, 20).scale(1, 0.88, 1)
+    const tomatoMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xc9321d,
+      roughness: 0.3,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08,
+    })
     const leafShape = new THREE.Shape()
     leafShape.moveTo(-0.27, 0)
     leafShape.quadraticCurveTo(0, 0.24, 0.27, 0)
     leafShape.quadraticCurveTo(0, -0.24, -0.27, 0)
-    const leafGeometry = new THREE.ShapeGeometry(leafShape, 8)
-    const positions = leafGeometry.attributes.position
-    for (let i = 0; i < positions.count; i++)
-      positions.setZ(i, 0.1 * (1 - Math.abs(positions.getX(i)) / 0.27))
+    const leafGeometry = new THREE.ShapeGeometry(leafShape, 12)
+    const leafPositions = leafGeometry.attributes.position
+    for (let i = 0; i < leafPositions.count; i++) {
+      const x = leafPositions.getX(i)
+      leafPositions.setZ(i, 0.1 * (1 - Math.abs(x) / 0.27))
+      leafGeometry.attributes.uv.setXY(i, (x + 0.27) / 0.54, leafPositions.getY(i) / 0.24 + 0.5)
+    }
     leafGeometry.computeVertexNormals()
+    const leafPhoto = cropPhoto(buffetPhoto.clone(), [0.622, 0.833, 0.09, 0.12])
     const leafMaterial = new THREE.MeshStandardMaterial({
-      color: 0x648743,
-      roughness: 0.75,
+      map: leafPhoto,
+      roughness: 0.55,
       side: THREE.DoubleSide,
     })
-    // Draw repeated ingredients in three batches, rather than separate objects.
+
+    // The base of each dish is a shallow dome textured with the real photo. A blurred copy
+    // of the photo lifts its surface into soft lumps, so it is not a flat disc.
+    const foodRadius = 0.82
+    const foodHeight = 0.1
+    const foodBase = 0.15
+    const sphereRadius = (foodRadius ** 2 + foodHeight ** 2) / (2 * foodHeight)
+    const foodGeometry = new THREE.SphereGeometry(
+      sphereRadius,
+      128,
+      48,
+      0,
+      Math.PI * 2,
+      0,
+      Math.asin(foodRadius / sphereRadius),
+    )
+    foodGeometry.translate(0, foodBase + foodHeight - sphereRadius, 0)
+    // Project the photo straight down so it is not stretched over the dome.
+    const foodPositions = foodGeometry.attributes.position
+    for (let i = 0; i < foodPositions.count; i++)
+      foodGeometry.attributes.uv.setXY(
+        i,
+        0.5 + foodPositions.getX(i) / (2 * foodRadius),
+        0.5 - foodPositions.getZ(i) / (2 * foodRadius),
+      )
+    const reliefScale = 0.07
+    const surfaceY = (radius) =>
+      foodBase + foodHeight - sphereRadius + Math.sqrt(sphereRadius ** 2 - radius ** 2)
+
+    // Thin shreds of red cabbage: a flat strip bent into a gentle curve.
+    const cabbageGeometry = new THREE.BoxGeometry(0.24, 0.012, 0.035, 10, 1, 1)
+    const cabbagePositions = cabbageGeometry.attributes.position
+    for (let i = 0; i < cabbagePositions.count; i++)
+      cabbagePositions.setZ(i, cabbagePositions.getZ(i) + 1.6 * cabbagePositions.getX(i) ** 2)
+    cabbageGeometry.computeVertexNormals()
+    const cucumberPhoto = cropPhoto(saladPhoto.clone(), [0.7, 0.356, 0.04, 0.04])
+
+    // 3D ingredients piled on top of the photo so each dish pops out of its plate.
+    // tilt: -π/2 lays flat pieces (leaves, onion rings) down on the food.
     const ingredients = [
       {
         geometry: leafGeometry,
         material: leafMaterial,
-        count: 26,
-        scale: 0.85,
+        count: 22,
+        scale: 0.8,
+        lift: 0.04,
         tilt: -Math.PI / 2,
       },
-      { geometry: tofuGeometry, material: tofuMaterial, count: 7, scale: 0.5, tilt: 0.3 },
-      { geometry: tomatoGeometry, material: tomatoMaterial, count: 6, scale: 0.6, tilt: 0 },
+      { geometry: tofuGeometry, material: tofuMaterial, count: 9, scale: 0.5, lift: 0.09 },
+      { geometry: tomatoGeometry, material: tomatoMaterial, count: 8, scale: 0.55, lift: 0.1 },
+      {
+        geometry: new THREE.SphereGeometry(0.1, 24, 16).scale(1, 0.8, 1.3),
+        material: new THREE.MeshPhysicalMaterial({
+          color: 0xfbf8f0,
+          roughness: 0.35,
+          clearcoat: 0.6,
+        }),
+        count: 3,
+        lift: 0.1,
+      },
+      {
+        geometry: new THREE.SphereGeometry(0.045, 12, 8).scale(1, 0.8, 1.4),
+        material: new THREE.MeshStandardMaterial({ color: 0x86b04f, roughness: 0.45 }),
+        count: 18,
+        lift: 0.07,
+      },
+      {
+        geometry: new THREE.SphereGeometry(0.032, 10, 8),
+        material: new THREE.MeshPhysicalMaterial({
+          color: 0xf3c442,
+          roughness: 0.35,
+          clearcoat: 0.5,
+        }),
+        count: 28,
+        lift: 0.07,
+      },
+      {
+        geometry: new RoundedBoxGeometry(0.09, 0.09, 0.09, 2, 0.015),
+        material: new THREE.MeshStandardMaterial({ map: cucumberPhoto, roughness: 0.4 }),
+        count: 12,
+        lift: 0.07,
+      },
+      {
+        geometry: cabbageGeometry,
+        material: new THREE.MeshStandardMaterial({ color: 0x6e2a63, roughness: 0.45 }),
+        count: 14,
+        lift: 0.05,
+        tilt: 0,
+      },
+      {
+        geometry: new THREE.TorusGeometry(0.022, 0.008, 6, 16),
+        material: new THREE.MeshStandardMaterial({ color: 0x5f9e3a, roughness: 0.5 }),
+        count: 18,
+        lift: 0.07,
+        tilt: -Math.PI / 2,
+      },
+      {
+        geometry: new THREE.SphereGeometry(0.04, 14, 10),
+        material: new THREE.MeshStandardMaterial({ color: 0xd9b77a, roughness: 0.7 }),
+        count: 10,
+        lift: 0.07,
+      },
+      {
+        geometry: new RoundedBoxGeometry(0.1, 0.1, 0.1, 2, 0.02),
+        material: new THREE.MeshStandardMaterial({ color: 0xe0782f, roughness: 0.6 }),
+        count: 8,
+        lift: 0.08,
+      },
     ]
-    const foodBase = new THREE.SphereGeometry(0.7, 24, 12)
-    const foodBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x7c984e, roughness: 1 })
+
+    // Each crop is the food inside the bowl or plate in that photo, without its rim.
+    const dishes = [
+      [saladPhoto, [0.496, 0.494, 0.311, 0.311]],
+      [mealPhoto, [0.542, 0.48, 0.167, 0.25]],
+      [buffetPhoto, [0.542, 0.513, 0.283, 0.425]],
+    ]
     const transform = new THREE.Object3D()
-    const plates = [0, 1, 2].map((index) => {
+    const plates = dishes.map(([photo, crop], index) => {
       const plate = new THREE.Group()
-      plate.scale.setScalar(index === 0 ? 1.45 : 0.47)
+      plate.scale.setScalar(index === 0 ? 1.45 : 0.5)
       addMesh(plateGeometry, porcelain, plate)
-      const filling = addMesh(foodBase, foodBaseMaterial, plate)
-      filling.scale.y = 0.15
-      filling.position.y = 0.2
+      const { map, relief } = dishTexture(photo, crop)
+      addMesh(
+        foodGeometry,
+        new THREE.MeshStandardMaterial({
+          map,
+          bumpMap: map,
+          bumpScale: 0.6,
+          displacementMap: relief,
+          displacementScale: reliefScale,
+          // A matte surface keeps reflections from greying out the photo.
+          roughness: 0.85,
+          envMapIntensity: 0.35,
+        }),
+        plate,
+      )
+      // Spread each ingredient in a sunflower spiral so the pile looks natural, not gridded.
       ingredients.forEach((food, type) => {
-        const pieces = addMesh(food.geometry, food.material, plate, food.count)
+        const pieces = addMesh(food.geometry, food.material, plate, true, food.count)
         for (let i = 0; i < food.count; i++) {
           const angle = i * 2.4 + type * 1.6 + index * 0.5
-          const radius = Math.sqrt((i + 0.5) / food.count) * 0.65
+          const radius = Math.sqrt((i + 0.5) / food.count) * 0.7
+          const scale = food.scale ?? 1
           transform.position.set(
             Math.sin(angle) * radius,
-            0.24 + (0.65 - radius) * 0.16 + type * 0.04,
+            surfaceY(radius) + reliefScale * 0.5 + food.lift * scale,
             Math.cos(angle) * radius,
           )
-          transform.rotation.set(food.tilt + Math.sin(i) * 0.2, angle, Math.cos(i) * 0.2)
-          transform.scale.setScalar(food.scale)
+          const tilt = food.tilt ?? 0.3
+          transform.rotation.set(tilt + Math.sin(i) * 0.25, angle, Math.cos(i) * 0.25)
+          transform.scale.setScalar(scale)
           transform.updateMatrix()
           pieces.setMatrixAt(i, transform.matrix)
         }

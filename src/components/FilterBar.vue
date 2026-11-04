@@ -25,8 +25,9 @@ const filters = useFiltersStore()
         >Available now</label
       >
     </div>
-    <span class="small text-secondary me-1">Dietary</span>
+    <span class="small text-secondary me-1">Dietary: </span>
     <div v-for="tag in DIETARY_TAGS" :key="tag" class="form-check form-check-inline mb-0">
+      <label class="form-check-label small" :for="`filter-${tag}`">{{ tag }}</label>
       <input
         :id="`filter-${tag}`"
         v-model="filters.selectedDietary"
@@ -34,7 +35,6 @@ const filters = useFiltersStore()
         :value="tag"
         class="form-check-input"
       />
-      <label class="form-check-label small" :for="`filter-${tag}`">{{ tag }}</label>
     </div>
   </div>
   <div

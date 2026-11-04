@@ -293,12 +293,20 @@ Store: state (query, foodType, selectedDietary, availableNow, sortBy), a getter
 clearAllFunction), following the Week 11 Pinia slides.
 
 The homepage's 3D food scene is isolated in src/components/HomeFoodScene.vue.
-Three.js loads on Home only, then WebGL renders curved porcelain plates,
-rounded golden tofu cubes, tomatoes, folded leaves and directional lighting.
-Food is modelled from shared 3D shapes; no flat photos are used in the
-renderer. The two small dishes keep the 22-second orbit around the large one; mouse movement tilts the group.
+Three.js loads on Home only, then WebGL renders glossy porcelain plates
+holding the real dish photos, plus floating tofu cubes, tomatoes and lettuce
+leaves. Each plate's food is a shallow dome textured with the food cropped
+from public/images. On a canvas the photo is sharpened (unsharp mask) so it
+stays crisp, and its edge is darkened so it sits inside the plate. A blurred
+grey copy of the photo is its displacement map, so the surface is lumpy
+rather than flat. 3D tofu, tomatoes, lettuce, quail eggs, edamame, corn,
+cucumber, red cabbage, spring onion, chickpeas and sweet potato are piled on
+top so each dish pops out of its plate; the tofu, cucumber and leaf textures
+are cut from the same photos. A RoomEnvironment
+gives soft reflections and a directional light casts soft shadows onto an
+invisible floor. The two small dishes keep the 22-second orbit around the large one; mouse movement tilts the group.
 
-Data flow: onMounted -> load Three.js -> create shared
+Data flow: onMounted -> load Three.js and the photos -> create shared
 geometry/materials -> animation loop -> canvas. Ingredients use instancing
 so repeated pieces share a draw call. The plate shape comes from
 rotating a short cross-section (LatheGeometry); tofu uses RoundedBoxGeometry.
@@ -309,8 +317,7 @@ Reduced motion draws a still view. Rendering pauses offscreen and in hidden
 tabs; observers, listeners, materials and GPU resources are released
 when leaving Home. A static three-plate illustration stays visible while the
 renderer loads, if WebGL is unavailable, or if the graphics context is lost.
-Stars and dots complete the faint brown dotted backdrop. Floor shadows are
-omitted. Mouse position controls horizontal yaw, vertical tilt and slight
+Stars and dots complete the faint brown dotted backdrop. Mouse position controls horizontal yaw, vertical tilt and slight
 parallax; leaving the artwork returns it to centre. No loading message or
 animation controls are added. FoodVisual.vue still supplies the account-page illustration; FoodLoader.vue handles action feedback.
 
