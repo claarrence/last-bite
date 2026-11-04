@@ -5,14 +5,12 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import HomeFoodScene from '@/components/HomeFoodScene.vue'
 import PostFoodButton from '@/components/PostFoodButton.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
-import FilterBar from '@/components/FilterBar.vue'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
 import { distanceKm, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
-import { useFiltersStore } from '@/stores/filters'
 
 const logo = ref(null)
 const navbar = ref(null)
@@ -28,12 +26,12 @@ watch(homeEntrance, () => {
   }
 })
 
-// Shared with the map page, so filters chosen here still apply there.
-const filters = useFiltersStore()
-
 const listings = ref([])
 const loading = ref(true)
 const error = ref('')
+const query = ref('')
+const foodType = ref('all')
+const sortBy = ref('newest')
 const now = ref(new Date())
 let timer
 
@@ -51,12 +49,15 @@ const availableListings = computed(() =>
   listings.value.filter((listing) => displayStatus(listing, now.value) === 'open'),
 )
 const visibleListings = computed(() => {
-  const results = availableListings.value.filter((listing) =>
-    filters.matchesFunction(listing, now.value),
-  )
-  if (filters.sortBy === 'ending') {
+  const search = query.value.trim().toLowerCase()
+  const results = availableListings.value.filter((listing) => {
+    const matchesType = foodType.value === 'all' || listing.listing_type === foodType.value
+    const details = `${listing.title} ${listing.address} ${listing.description || ''}`.toLowerCase()
+    return matchesType && details.includes(search)
+  })
+  if (sortBy.value === 'ending') {
     results.sort((a, b) => new Date(a.pickup_end) - new Date(b.pickup_end))
-  } else if (filters.sortBy === 'nearest' && userLocation.value) {
+  } else if (sortBy.value === 'nearest' && userLocation.value) {
     // Listings without map coordinates go last.
     results.sort((a, b) => (cardDistance(a) ?? Infinity) - (cardDistance(b) ?? Infinity))
   }
@@ -67,7 +68,7 @@ const visibleListings = computed(() => {
 // Only shown on cards while sorting by nearest.
 function cardDistance(listing) {
   const coords = listingCoords(listing)
-  if (filters.sortBy !== 'nearest' || !userLocation.value || !coords) return null
+  if (sortBy.value !== 'nearest' || !userLocation.value || !coords) return null
   return distanceKm(userLocation.value, coords)
 }
 
@@ -99,21 +100,21 @@ async function locateUser() {
   locationError.value = ''
   if (!('geolocation' in navigator)) {
     locationError.value = 'Your browser cannot share its location, so listings stay newest first.'
-    filters.sortBy = 'newest'
+    sortBy.value = 'newest'
     return
   }
   // Browsers only allow location on HTTPS or localhost, and never show the popup there.
   if (!window.isSecureContext) {
     locationError.value =
       'Location needs a secure (https://) connection. Open LastBite over HTTPS to sort by distance.'
-    filters.sortBy = 'newest'
+    sortBy.value = 'newest'
     return
   }
   // Once location is blocked for this site, the browser will not ask again,
   // so explain how to turn it back on instead of failing silently.
   if (await isLocationBlocked()) {
     locationError.value = BLOCKED_MESSAGE
-    filters.sortBy = 'newest'
+    sortBy.value = 'newest'
     return
   }
   // This call shows the browser's "Allow location?" popup when the user has not decided yet.
@@ -125,7 +126,7 @@ async function locateUser() {
     // err.code 1 means the user (or browser settings) blocked location access.
     locationError.value =
       err.code === 1 ? BLOCKED_MESSAGE : 'Could not find your location. Please try again.'
-    filters.sortBy = 'newest'
+    sortBy.value = 'newest'
   } finally {
     locating.value = false
   }
@@ -133,15 +134,14 @@ async function locateUser() {
 
 // The warning is not cleared here: a failed lookup switches back to "newest",
 // which would otherwise hide the message straight away.
-// `immediate` because the store keeps "Nearest to me" when the user comes back to this page,
-// but the location found last time was lost when the page closed.
-watch(
-  () => filters.sortBy,
-  (value) => {
-    if (value === 'nearest' && !userLocation.value) locateUser()
-  },
-  { immediate: true },
-)
+watch(sortBy, (value) => {
+  if (value === 'nearest' && !userLocation.value) locateUser()
+})
+
+function clearFilters() {
+  query.value = ''
+  foodType.value = 'all'
+}
 
 async function loadListings() {
   loading.value = true
@@ -209,7 +209,7 @@ onUnmounted(() => clearInterval(timer))
           </svg>
           <input
             id="food-search"
-            v-model="filters.query"
+            v-model="query"
             type="search"
             class="form-control"
             placeholder="Search food or pickup location"
@@ -225,9 +225,9 @@ onUnmounted(() => clearInterval(timer))
             :key="type.value"
             type="button"
             class="btn btn-sm flex-fill text-nowrap"
-            :aria-pressed="filters.foodType === type.value"
-            :class="filters.foodType === type.value ? 'btn-success' : 'text-secondary'"
-            @click="filters.foodType = type.value"
+            :aria-pressed="foodType === type.value"
+            :class="foodType === type.value ? 'btn-success' : 'text-secondary'"
+            @click="foodType = type.value"
           >
             {{ type.label }}
           </button>
@@ -249,7 +249,7 @@ onUnmounted(() => clearInterval(timer))
           ></span>
           <select
             id="food-sort"
-            v-model="filters.sortBy"
+            v-model="sortBy"
             class="form-select form-select-sm w-auto"
             :disabled="locating"
           >
@@ -259,7 +259,6 @@ onUnmounted(() => clearInterval(timer))
           </select>
         </div>
       </div>
-      <FilterBar />
       <div
         v-if="locationError"
         class="alert alert-warning d-flex justify-content-between align-items-start gap-2 py-2 small"
@@ -307,7 +306,7 @@ onUnmounted(() => clearInterval(timer))
           v-if="availableListings.length"
           type="button"
           class="btn btn-outline-success btn-sm"
-          @click="filters.clearAllFunction()"
+          @click="clearFilters"
         >
           Clear filters
         </button>
