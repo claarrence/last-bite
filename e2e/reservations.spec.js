@@ -148,6 +148,7 @@ test('My Reservations changes the quantity and cancels a booking', async ({ page
   const booking = { ...reservationFor(listing), listing }
   const sent = []
   await page.route('**/rest/v1/reservations*', (route) => route.fulfill({ json: [booking] }))
+  await page.route('**/rest/v1/reviews*', (route) => route.fulfill({ json: [] }))
   await page.route('**/rest/v1/rpc/update_reservation_quantity', (route) => {
     sent.push(route.request().postDataJSON())
     return route.fulfill({ json: reservationFor(listing, { quantity: 3 }) })

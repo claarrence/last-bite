@@ -14,10 +14,14 @@ import {
   updateReservationQuantity,
 } from '@/utils/reservations'
 import { RESERVATION_TABS, reservationStatus } from '@/utils/reservationRules'
+import { getMyReviews } from '@/utils/reviews'
 import { vReveal } from '@/utils/reveal'
 
 const { show: showToast } = useToast()
 const { runAction } = useActionFeedback()
+
+// Ids of reservations the user has already reviewed (one review per collected order).
+const reviewedIds = ref([])
 
 const reservations = ref([])
 const loading = ref(true)
@@ -31,8 +35,9 @@ const busyId = ref(null)
 const pendingCancel = ref(null)
 
 onMounted(async () => {
+  let user = null
   try {
-    const user = await getCurrentUser()
+    user = await getCurrentUser()
     reservations.value = await getMyReservations(user.id)
     for (const r of reservations.value) quantityDrafts.value[r.id] = r.quantity
   } catch (err) {
@@ -40,6 +45,27 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  // Loaded after the bookings are shown, so a slow reviews request cannot hold up the page.
+  if (user) await loadReviewedIds(user.id)
+})
+
+// If reviews cannot load, the bookings still work; review links just say "Write".
+async function loadReviewedIds(userId) {
+  try {
+    const reviews = await getMyReviews(userId)
+    reviewedIds.value = reviews.map((review) => review.reservation_id)
+  } catch {
+    reviewedIds.value = []
+  }
+}
+
+// Collected orders still waiting for a review, used for the prompt.
+const toReviewCount = computed(() => {
+  let count = 0
+  for (const r of reservations.value) {
+    if (r.status === 'collected' && !reviewedIds.value.includes(r.id)) count++
+  }
+  return count
 })
 
 // 'reserved' | 'collected' | 'cancelled' | 'expired' (expired is worked out from the pickup time)
@@ -137,6 +163,26 @@ async function confirmCancel() {
     <div v-if="!loading && error" class="alert alert-danger" role="alert">{{ error }}</div>
 
     <template v-else-if="!loading">
+      <div
+        v-if="toReviewCount"
+        class="alert alert-success d-flex flex-wrap align-items-center gap-2"
+        role="status"
+        data-testid="review-prompt"
+      >
+        <span>
+          You have {{ toReviewCount }} collected order{{ toReviewCount === 1 ? '' : 's' }} to
+          review. How was the food?
+        </span>
+        <button
+          v-if="activeTab !== 'collected'"
+          type="button"
+          class="btn btn-sm btn-success ms-sm-auto"
+          @click="activeTab = 'collected'"
+        >
+          Show collected orders
+        </button>
+      </div>
+
       <ul class="nav nav-pills mb-4 flex-nowrap overflow-auto" role="tablist">
         <li v-for="tab in RESERVATION_TABS" :key="tab.key" class="nav-item" role="presentation">
           <button
@@ -210,6 +256,15 @@ async function confirmCancel() {
               <p v-if="rowErrors[reservation.id]" class="text-danger small mt-2 mb-0" role="alert">
                 {{ rowErrors[reservation.id] }}
               </p>
+            </template>
+            <template v-else-if="activeTab === 'collected'" v-slot:actions>
+              <RouterLink
+                :to="{ name: 'review-form', params: { reservationId: reservation.id } }"
+                class="btn btn-sm btn-outline-success"
+                data-testid="review-link"
+              >
+                {{ reviewedIds.includes(reservation.id) ? 'Edit your review' : 'Write a review' }}
+              </RouterLink>
             </template>
           </ReservationCard>
         </div>

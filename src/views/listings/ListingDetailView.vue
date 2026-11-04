@@ -7,6 +7,7 @@ import LocationMap from '@/components/LocationMap.vue'
 import ReserveForm from '@/components/reservations/ReserveForm.vue'
 import ProviderReservations from '@/components/reservations/ProviderReservations.vue'
 import StatusUpdates from '@/components/status/StatusUpdates.vue'
+import StarRating from '@/components/reviews/StarRating.vue'
 import { useListingActions } from '@/composables/useListingActions'
 import { getCurrentUser } from '@/utils/session'
 import { displayStatus, getListing, photoUrl } from '@/utils/listings'
@@ -16,6 +17,8 @@ import { quantityLevelLabel, UNKNOWN_ALLERGEN } from '@/utils/listingOptions'
 import { formatPickupWindow, formatPrice } from '@/utils/format'
 import { pickupCountdown } from '@/utils/countdown'
 import { listingCoords } from '@/utils/map'
+import { getEstablishmentReviews } from '@/utils/reviews'
+import { summarizeReviews } from '@/utils/reviewRules'
 import { subscribeToListingUpdates, getListingUpdates, isVerifiedRecently } from '@/utils/statusUpdates'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -57,6 +60,19 @@ async function loadReservationInfo() {
   }
 }
 
+// Provider rating summary, shown above the reviews link. Loaded separately and
+// silently skipped on failure, since the link still leads to the full reviews.
+const providerSummary = ref(null)
+
+async function loadProviderSummary() {
+  try {
+    const reviews = await getEstablishmentReviews(listing.value.owner_id)
+    providerSummary.value = summarizeReviews(reviews)
+  } catch {
+    providerSummary.value = null
+  }
+}
+
 const updates = ref([])
 
 async function loadUpdates() {
@@ -84,7 +100,7 @@ onMounted(async () => {
     else {
       const jobs = [loadUpdates()]
       if (listing.value.listing_type === 'discounted') {
-        jobs.push(loadReservationInfo())
+        jobs.push(loadReservationInfo(), loadProviderSummary())
       }
       await Promise.all(jobs)
       stopListening = subscribeToListingUpdates(listing.value.id, addUpdate)
@@ -226,6 +242,28 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
 
         <p v-if="listing.description" class="text-break" style="white-space: pre-line">
           {{ listing.description }}
+        </p>
+
+        <div
+          v-if="isDiscounted && providerSummary"
+          class="d-flex align-items-center gap-2 small mb-1"
+          data-testid="provider-rating"
+        >
+          <template v-if="providerSummary.count">
+            <span class="fw-bold">{{ providerSummary.average.toFixed(1) }}</span>
+            <StarRating :rating="providerSummary.average" readonly />
+            <span class="text-secondary">
+              ({{ providerSummary.count }} review{{ providerSummary.count === 1 ? '' : 's' }})
+            </span>
+          </template>
+          <span v-else class="text-secondary">No reviews yet</span>
+        </div>
+        <p v-if="isDiscounted" class="small">
+          <RouterLink
+            :to="{ name: 'establishment', params: { id: listing.owner_id } }"
+            data-testid="provider-reviews-link"
+            >See this provider's reviews</RouterLink
+          >
         </p>
 
         <dl class="row small mb-3">

@@ -84,6 +84,17 @@ export async function getMyReservations(userId) {
   return data
 }
 
+// One of the signed-in customer's reservations with its listing, or null.
+export async function getReservation(reservationId) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(`*, listing:listings(${LISTING_FIELDS})`)
+    .eq('id', reservationId)
+    .limit(1)
+  if (error) throw explainError(error, SQL_FILE)
+  return data[0] || null
+}
+
 // The customer's active reservation for one listing, or null.
 export async function getActiveReservation(listingId, userId) {
   const { data, error } = await supabase

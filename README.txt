@@ -76,8 +76,9 @@ Reservations setup (Supabase dashboard -> SQL Editor):
   3. Run supabase/migrations/004_pickup_codes.sql for six-digit pickup numbers.
   4. Run supabase/migrations/005_establishment_location.sql for the pickup
      location establishments choose at registration.
-There is no 003 migration in this port: that belongs to the separate reviews
-feature. Existing pickup references remain valid after running 004.
+  5. Run supabase/migrations/003_reviews.sql for reviews and ratings (it only
+     needs 002, so it can run before or after 004 and 005).
+Existing pickup references remain valid after running 004.
 
 RESERVATIONS
 ------------
@@ -99,8 +100,40 @@ bookings; a listing with reservation records cannot be deleted.
 
 The listing detail page and food grid make bookings reachable. The homepage
 now has local search, type filters, pickup-deadline and distance sorting, and
-a link to the food map. Reviews remain separate work.
+a link to the food map.
 No migrations are applied automatically by running the frontend.
+
+REVIEWS AND RATINGS
+-------------------
+Ported from claarrence/A-Plus-for-WAD2.
+
+After a provider marks a reservation Collected, its customer can review the
+order. My Reservations shows a prompt and a "Write a review" link on each
+collected order.
+
+  - Review form (/reservations/:reservationId/review, ReviewFormView.vue):
+    1-5 stars, optional quick tags (Fresh, As described, Generous portion,
+    Easy to find), an optional comment (500 characters) and an optional
+    photo. A rating is required. The same page edits or deletes the review.
+  - StarRating.vue: the stars are radio buttons, so they work with mouse,
+    touch and the keyboard (arrow keys).
+  - Establishment page (/establishments/:id, EstablishmentView.vue): name and
+    type, average rating, number of reviews and most common tags, with
+    reviews sorted by most recent or highest rated. Authors edit or delete
+    their own review here, and the provider can post or edit a public reply.
+  - Links: the rating summary and "See this provider's reviews" on
+    discounted listings, and "Reviews of my food" on the establishment
+    dashboard.
+
+Rules enforced in the database (003_reviews.sql):
+  - Only the customer of a collected reservation can review it, and only
+    once (reservation_id is unique). The review must match that
+    reservation's listing and provider.
+  - Authors can change only their rating, tags, comment and photo; providers
+    can change only the reply (a trigger checks which columns changed). Only
+    authors can delete.
+  - Review photos go in a separate public bucket (review-photos); users
+    upload only into their own folder.
 
 
 TESTING
@@ -124,7 +157,8 @@ Lint: pnpm lint
 
 PROJECT STRUCTURE
 -----------------
-  src/views/        Route pages (HomeView, AuthView, establishment/Dashboard)
+  src/views/        Route pages (HomeView, AuthView, establishment/Dashboard,
+                    reviews/ReviewFormView, reviews/EstablishmentView)
                     listings/ListingDetailView, listings/NearbyMapView,
                     reservations/MyReservationsView
   src/components/   Reusable UI (NavBar, BrandLogo, FoodVisual, AddressPicker,

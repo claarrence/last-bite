@@ -7,6 +7,8 @@ import MyListingsView from '@/views/listings/MyListingsView.vue'
 import ListingDetailView from '@/views/listings/ListingDetailView.vue'
 import NearbyMapView from '@/views/listings/NearbyMapView.vue'
 import MyReservationsView from '@/views/reservations/MyReservationsView.vue'
+import ReviewFormView from '@/views/reviews/ReviewFormView.vue'
+import EstablishmentView from '@/views/reviews/EstablishmentView.vue'
 import { getCurrentUser } from '@/utils/session'
 
 const router = createRouter({
@@ -82,6 +84,19 @@ const router = createRouter({
       name: 'my-listings',
       component: MyListingsView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/reservations/:reservationId/review',
+      name: 'review-form',
+      component: ReviewFormView,
+      props: true,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/establishments/:id',
+      name: 'establishment',
+      component: EstablishmentView,
+      props: true,
     },
   ],
 })
