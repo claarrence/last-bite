@@ -17,7 +17,7 @@ import {
   uploadListingPhoto,
 } from '@/utils/listings'
 import { reverseGeocode } from '@/utils/onemap'
-import { isInSingapore } from '@/utils/map'
+import { getBrowserPosition, isInSingapore } from '@/utils/map'
 import { toDateTime, validateListing } from '@/utils/listingValidation'
 import { toDateInput, toTimeInput } from '@/utils/format'
 import { ALLERGENS, DIETARY_TAGS, QUANTITY_LEVELS, UNKNOWN_ALLERGEN } from '@/utils/listingOptions'
@@ -185,15 +185,6 @@ async function onMapPick({ lat, lng, address }) {
 const locating = ref(false)
 const locateError = ref('')
 
-function getBrowserPosition() {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-    })
-  })
-}
-
 async function useMyLocation() {
   locateError.value = ''
   if (!('geolocation' in navigator)) {
@@ -208,7 +199,7 @@ async function useMyLocation() {
   }
   locating.value = true
   try {
-    const position = await getBrowserPosition()
+    const position = await getBrowserPosition({ enableHighAccuracy: true, timeout: 10000 })
     const lat = position.coords.latitude
     const lng = position.coords.longitude
     if (!isInSingapore(lat, lng)) {

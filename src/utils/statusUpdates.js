@@ -1,4 +1,5 @@
 import { supabase } from '@/utils/supabase'
+import { photoUrl } from '@/utils/listings'
 
 export const UPDATE_OPTIONS = [
   { value: 'still_available', label: 'Still available', badge: 'badge-green', btn: 'btn-outline-success' },
@@ -76,12 +77,6 @@ export function subscribeToListingUpdates(listingId, onInsert) {
   return () => supabase.removeChannel(channel)
 }
 
-function isBundledPhoto(path) {
-  return path.startsWith('/images/')
-}
-
 export function statusPhotoUrl(path) {
-  if (!path) return ''
-  if (isBundledPhoto(path)) return path
-  return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl
+  return photoUrl(path, PHOTO_BUCKET)
 }

@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 const sceneElement = ref(null)
 const canvas = ref(null)
 const ready = ref(false)
+// Photos are only used by the static fallback; the 3D food is modelled, not photographed.
 const photos = ['salad', 'meal', 'buffet']
 const resources = new Set()
 let renderer, resizeObserver, visibilityObserver, motionPreference
@@ -47,6 +48,13 @@ onBeforeUnmount(() => {
   disposeScene()
 })
 
+// Repeatable pseudo-random numbers, so the food is arranged the same way on every visit.
+let seed = 11
+function random() {
+  seed = (seed * 16807) % 2147483647
+  return seed / 2147483647
+}
+
 onMounted(async () => {
   try {
     // Load the renderer only on Home, after the page has mounted.
@@ -56,55 +64,48 @@ onMounted(async () => {
       import('three/addons/environments/RoomEnvironment.js'),
     ])
     if (disposed) return
-    // Wait for the food photos so the plates never render empty.
-    const loader = new THREE.TextureLoader()
-    const [saladPhoto, mealPhoto, buffetPhoto] = await Promise.all(
-      photos.map((photo) => loader.loadAsync(`/images/${photo}.jpg`)),
-    )
-    for (const photo of [saladPhoto, mealPhoto, buffetPhoto]) {
-      photo.colorSpace = THREE.SRGBColorSpace
-      resources.add(photo)
-    }
-    if (disposed) return disposeScene()
+    seed = 11
 
     renderer = new THREE.WebGLRenderer({ canvas: canvas.value, alpha: true, antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    // Neutral tone mapping keeps the photo colours true; anisotropy keeps them sharp at an angle.
     renderer.toneMapping = THREE.NeutralToneMapping
     renderer.shadowMap.enabled = true
-    const anisotropy = renderer.capabilities.getMaxAnisotropy()
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
     const scene = new THREE.Scene()
-    // A soft studio environment gives the porcelain and tomatoes believable reflections.
+    // A soft studio environment gives the porcelain, tomatoes and grapes believable reflections.
     const pmrem = new THREE.PMREMGenerator(renderer)
     const room = new RoomEnvironment()
     scene.environment = pmrem.fromScene(room, 0.04).texture
-    scene.environmentIntensity = 0.8
+    scene.environmentIntensity = 0.75
     resources.add(scene.environment)
     room.dispose()
     pmrem.dispose()
 
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 40)
-    camera.position.set(0, 6.1, 6.6)
-    camera.lookAt(0, 0, 0)
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 40)
+    camera.position.set(0, 5.2, 7)
+    camera.lookAt(0, 0.5, 0)
     const world = new THREE.Group()
-    world.position.y = 0.3
     scene.add(world)
-    scene.add(new THREE.HemisphereLight(0xfffdf9, 0xb7a18b, 0.5))
-    const light = new THREE.DirectionalLight(0xfff2de, 2)
+    scene.add(new THREE.HemisphereLight(0xfffdf9, 0xb7a18b, 0.6))
+    const light = new THREE.DirectionalLight(0xfff2de, 2.2)
     light.position.set(-3, 7, 5)
     light.castShadow = true
     light.shadow.mapSize.set(1024, 1024)
-    light.shadow.radius = 6
+    light.shadow.radius = 5
     light.shadow.bias = -0.0005
     light.shadow.normalBias = 0.02
-    Object.assign(light.shadow.camera, { left: -3.6, right: 3.6, top: 3.6, bottom: -3.6, far: 20 })
+    Object.assign(light.shadow.camera, { left: -3.8, right: 3.8, top: 3.8, bottom: -3.8, far: 20 })
     scene.add(light)
+    // A warm light from behind outlines the food so it separates from the background.
+    const rimLight = new THREE.DirectionalLight(0xffd9b8, 0.9)
+    rimLight.position.set(4, 3, -5)
+    scene.add(rimLight)
 
     // Reuse geometry and materials; all objects belong to this one scene.
     function addMesh(geometry, material, parent = world, shadows = true, count = 0) {
       resources.add(geometry)
-      resources.add(material)
+      for (const part of [material].flat()) resources.add(part)
       const mesh = count
         ? new THREE.InstancedMesh(geometry, material, count)
         : new THREE.Mesh(geometry, material)
@@ -113,102 +114,302 @@ onMounted(async () => {
       return mesh
     }
 
-    // Point a texture at one region of its photo: [centre u, centre v, radius u, radius v].
-    function cropPhoto(texture, [u, v, radiusU, radiusV]) {
-      texture.repeat.set(radiusU * 2, radiusV * 2)
-      texture.offset.set(u - radiusU, v - radiusV)
-      texture.anisotropy = anisotropy
+    function canvasTexture(size, draw, colour = true) {
+      const surface = document.createElement('canvas')
+      surface.width = surface.height = size
+      draw(surface.getContext('2d'), size)
+      const texture = new THREE.CanvasTexture(surface)
+      if (colour) texture.colorSpace = THREE.SRGBColorSpace
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
       resources.add(texture)
       return texture
     }
 
-    // An unsharp mask: push each pixel away from a blurred copy so food edges stay crisp.
-    function sharpen(canvas, amount) {
-      const { width, height } = canvas
-      const blurred = document.createElement('canvas')
-      blurred.width = width
-      blurred.height = height
-      const blurContext = blurred.getContext('2d')
-      blurContext.filter = 'blur(2px)'
-      blurContext.drawImage(canvas, 0, 0)
-      const soft = blurContext.getImageData(0, 0, width, height).data
-      const context = canvas.getContext('2d')
-      const image = context.getImageData(0, 0, width, height)
-      const pixels = image.data
-      for (let i = 0; i < pixels.length; i++)
-        if (i % 4 !== 3) pixels[i] += (pixels[i] - soft[i]) * amount
-      context.putImageData(image, 0, 0)
-    }
+    // Grey speckles used as a bump map: crust on bread, pores on tofu, texture in the greens.
+    const speckle = canvasTexture(
+      256,
+      (context, size) => {
+        context.fillStyle = '#808080'
+        context.fillRect(0, 0, size, size)
+        for (let i = 0; i < 2600; i++) {
+          const shade = Math.floor(80 + random() * 100)
+          context.fillStyle = `rgb(${shade}, ${shade}, ${shade})`
+          context.beginPath()
+          context.arc(random() * size, random() * size, 0.6 + random() * 2.4, 0, Math.PI * 2)
+          context.fill()
+        }
+      },
+      false,
+    )
+    speckle.wrapS = speckle.wrapT = THREE.RepeatWrapping
 
-    // Copy a dish out of its photo and darken the edge, so the food sits down inside the plate.
-    function dishTexture(photo, [u, v, radiusU, radiusV]) {
-      const size = 1024
-      const dish = document.createElement('canvas')
-      dish.width = dish.height = size
-      const context = dish.getContext('2d')
-      const { width, height } = photo.image
-      context.filter = 'contrast(1.08) saturate(1.15)'
-      context.drawImage(
-        photo.image,
-        (u - radiusU) * width,
-        (1 - v - radiusV) * height,
-        radiusU * 2 * width,
-        radiusV * 2 * height,
-        0,
-        0,
-        size,
-        size,
-      )
-      context.filter = 'none'
-      sharpen(dish, 0.9)
-      const shade = context.createRadialGradient(
-        size / 2,
-        size / 2,
-        0,
-        size / 2,
-        size / 2,
-        size / 2,
-      )
-      shade.addColorStop(0.55, 'rgba(45, 28, 18, 0)')
-      shade.addColorStop(0.85, 'rgba(45, 28, 18, 0.18)')
-      shade.addColorStop(1, 'rgba(45, 28, 18, 0.6)')
-      // A blurred grey copy becomes the height map; it fades to zero at the edge so the rim stays down.
-      const heightCanvas = document.createElement('canvas')
-      heightCanvas.width = heightCanvas.height = 256
-      const heightContext = heightCanvas.getContext('2d')
-      heightContext.filter = 'grayscale(1) blur(4px)'
-      heightContext.drawImage(dish, 0, 0, 256, 256)
-      heightContext.filter = 'none'
-      const fade = heightContext.createRadialGradient(128, 128, 0, 128, 128, 128)
-      fade.addColorStop(0.6, 'rgba(0, 0, 0, 0)')
-      fade.addColorStop(0.98, 'rgba(0, 0, 0, 1)')
-      heightContext.fillStyle = fade
-      heightContext.fillRect(0, 0, 256, 256)
-
-      context.fillStyle = shade
+    // Leaf veins: a light midrib with side veins on grey, tinted green per leaf.
+    const veins = canvasTexture(256, (context, size) => {
+      context.fillStyle = '#d4d4d4'
       context.fillRect(0, 0, size, size)
-      const map = new THREE.CanvasTexture(dish)
-      map.colorSpace = THREE.SRGBColorSpace
-      map.anisotropy = anisotropy
-      const relief = new THREE.CanvasTexture(heightCanvas)
-      resources.add(map)
-      resources.add(relief)
-      return { map, relief }
-    }
+      context.strokeStyle = '#ffffff'
+      context.lineWidth = 6
+      context.beginPath()
+      context.moveTo(0, size / 2)
+      context.lineTo(size, size / 2)
+      context.stroke()
+      context.lineWidth = 2.5
+      for (let x = 20; x < size; x += 26) {
+        context.beginPath()
+        context.moveTo(x, size / 2)
+        context.lineTo(x + 30, 0)
+        context.moveTo(x, size / 2)
+        context.lineTo(x + 30, size)
+        context.stroke()
+      }
+    })
 
-    // An invisible floor that only shows the soft shadows under the plates and garnish.
+    // The cut face of an orange slice: rind, pith and ten juicy segments.
+    const orangeFace = canvasTexture(256, (context, size) => {
+      const centre = size / 2
+      context.fillStyle = '#e8781f'
+      context.fillRect(0, 0, size, size)
+      context.fillStyle = '#fbe6bd'
+      context.beginPath()
+      context.arc(centre, centre, centre * 0.92, 0, Math.PI * 2)
+      context.fill()
+      for (let i = 0; i < 10; i++) {
+        const start = (i / 10) * Math.PI * 2 + 0.04
+        const end = ((i + 1) / 10) * Math.PI * 2 - 0.04
+        context.fillStyle = i % 2 ? '#f6a133' : '#f39a2b'
+        context.beginPath()
+        context.moveTo(centre, centre)
+        context.arc(centre, centre, centre * 0.84, start, end)
+        context.fill()
+      }
+      context.fillStyle = '#fde9c4'
+      context.beginPath()
+      context.arc(centre, centre, centre * 0.08, 0, Math.PI * 2)
+      context.fill()
+    })
+
+    // An invisible floor that only shows the soft shadows.
     const ground = addMesh(
-      new THREE.CircleGeometry(3.4, 48),
-      new THREE.ShadowMaterial({ opacity: 0.16 }),
+      new THREE.CircleGeometry(3.8, 48),
+      new THREE.ShadowMaterial({ opacity: 0.14 }),
       world,
       false,
     )
     ground.rotation.x = -Math.PI / 2
-    ground.position.y = -0.01
     ground.receiveShadow = true
 
-    // Rotate this short cross-section to form a curved porcelain plate.
-    const profile = [
+    const porcelain = new THREE.MeshPhysicalMaterial({
+      color: 0xf6f0e6,
+      roughness: 0.3,
+      clearcoat: 1,
+      clearcoatRoughness: 0.1,
+    })
+    const accent = new THREE.MeshStandardMaterial({ color: 0xad4532, roughness: 0.4 })
+    // Turn a short cross-section [radius, height] into a round dish on a lathe.
+    function dishGeometry(profile) {
+      return new THREE.LatheGeometry(
+        profile.map(([x, y]) => new THREE.Vector2(x, y)),
+        72,
+      )
+    }
+
+    // Shared food shapes.
+    const leafGeometry = new THREE.PlaneGeometry(0.6, 1, 18, 6)
+    const leafPoints = leafGeometry.attributes.position
+    for (let i = 0; i < leafPoints.count; i++) {
+      const x = leafPoints.getX(i)
+      const across = leafPoints.getY(i)
+      // Pointed at both tips, cupped across the middle, ruffled along the edge.
+      // max(0, …): rounding can make the sine slightly negative at a tip, and a fractional power of that is NaN.
+      const width = 0.22 * Math.max(0, Math.sin(Math.PI * (x / 0.6 + 0.5))) ** 0.7
+      const y = across * 2 * width
+      const z = 1.8 * y * y - 0.35 * x * x + Math.sin(x * 32) * 0.02 * Math.abs(across) * 2
+      leafPoints.setXYZ(i, x, y, z)
+    }
+    leafGeometry.computeVertexNormals()
+    const leafMaterial = new THREE.MeshStandardMaterial({
+      map: veins,
+      roughness: 0.5,
+      side: THREE.DoubleSide,
+    })
+    const tofuGeometry = new RoundedBoxGeometry(0.22, 0.22, 0.22, 3, 0.045)
+    const tofuMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe3a65a,
+      roughness: 0.65,
+      bumpMap: speckle,
+      bumpScale: 1.2,
+    })
+    const tomatoGeometry = new THREE.SphereGeometry(0.1, 32, 20).scale(1, 0.88, 1)
+    const tomatoMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xd0331f,
+      roughness: 0.25,
+      clearcoat: 1,
+      clearcoatRoughness: 0.06,
+    })
+    const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x4d7f2b, roughness: 0.6 })
+    const transform = new THREE.Object3D()
+    const tint = new THREE.Color()
+
+    // ---------- The main salad bowl ----------
+    const bowl = new THREE.Group()
+    world.add(bowl)
+    addMesh(
+      dishGeometry([
+        [0, 0],
+        [0.5, 0],
+        [0.56, 0.04],
+        [0.8, 0.2],
+        [1, 0.42],
+        [1.1, 0.58],
+        [1.12, 0.62],
+        [1.08, 0.64],
+        [0.98, 0.53],
+        [0.78, 0.35],
+        [0.5, 0.21],
+        [0, 0.21],
+      ]),
+      porcelain,
+      bowl,
+    )
+    const rim = addMesh(new THREE.TorusGeometry(1.105, 0.02, 10, 96), accent, bowl)
+    rim.rotation.x = -Math.PI / 2
+    rim.position.y = 0.625
+
+    // A mound of greens fills the bowl; everything else is placed on its surface.
+    const bedRadius = 0.99
+    const bedHeight = 0.2
+    const bedBase = 0.5
+    const bedSphere = (bedRadius ** 2 + bedHeight ** 2) / (2 * bedHeight)
+    const bedGeometry = new THREE.SphereGeometry(
+      bedSphere,
+      96,
+      24,
+      0,
+      Math.PI * 2,
+      0,
+      Math.asin(bedRadius / bedSphere),
+    ).translate(0, bedBase + bedHeight - bedSphere, 0)
+    addMesh(
+      bedGeometry,
+      new THREE.MeshStandardMaterial({
+        color: 0x3f6b2a,
+        roughness: 0.85,
+        bumpMap: speckle,
+        bumpScale: 2,
+      }),
+      bowl,
+    )
+    const bedSurface = (radius) =>
+      bedBase + bedHeight - bedSphere + Math.sqrt(bedSphere ** 2 - radius ** 2)
+
+    // Scatter `count` copies of a shape over part of the bowl, between two angles and radii.
+    function scatter(geometry, material, count, options) {
+      const { from = 0, to = Math.PI * 2, inner = 0.1, outer = 0.8, lift, tilt = 0.3 } = options
+      const { size = [1, 1], colours } = options
+      const pieces = addMesh(geometry, material, bowl, true, count)
+      for (let i = 0; i < count; i++) {
+        const angle = from + random() * (to - from)
+        const radius = inner + Math.sqrt(random()) * (outer - inner)
+        const scale = size[0] + random() * (size[1] - size[0])
+        transform.position.set(
+          Math.cos(angle) * radius,
+          bedSurface(radius) + lift * scale,
+          Math.sin(angle) * radius,
+        )
+        transform.rotation.set(
+          tilt + (random() - 0.5) * 0.5,
+          random() * Math.PI * 2,
+          (random() - 0.5) * 0.4,
+        )
+        transform.scale.setScalar(scale)
+        transform.updateMatrix()
+        pieces.setMatrixAt(i, transform.matrix)
+        if (colours) pieces.setColorAt(i, tint.setHex(colours[Math.floor(random() * colours.length)]))
+      }
+      pieces.instanceMatrix.needsUpdate = true
+      if (colours) pieces.instanceColor.needsUpdate = true
+    }
+
+    const greens = [0x5f9b3a, 0x7bb547, 0x4a7f2c, 0x93c45a]
+    scatter(leafGeometry, leafMaterial, 46, {
+      inner: 0.05,
+      outer: 0.97,
+      lift: 0.03,
+      tilt: -Math.PI / 2,
+      size: [0.75, 1.1],
+      colours: greens,
+    })
+    // Toppings sit in neat sections, like a poke bowl.
+    scatter(tofuGeometry, tofuMaterial, 6, { from: 0, to: 1.2, inner: 0.32, lift: 0.13 })
+    scatter(tomatoGeometry, tomatoMaterial, 7, { from: 1.3, to: 2.5, inner: 0.32, lift: 0.11 })
+    scatter(
+      new THREE.SphereGeometry(0.05, 16, 10).scale(1.5, 0.8, 0.85),
+      new THREE.MeshStandardMaterial({ color: 0x86b54d, roughness: 0.45 }),
+      16,
+      { from: 2.6, to: 3.75, inner: 0.32, lift: 0.06 },
+    )
+    scatter(
+      new RoundedBoxGeometry(0.045, 0.04, 0.045, 2, 0.012),
+      new THREE.MeshPhysicalMaterial({ color: 0xf3c13f, roughness: 0.35, clearcoat: 0.5 }),
+      34,
+      { from: 3.85, to: 5, inner: 0.32, lift: 0.05 },
+    )
+    // Cucumber slices: dark skin round the edge, pale flesh on the faces.
+    const cucumberFlesh = new THREE.MeshStandardMaterial({ color: 0xd2e6a4, roughness: 0.4 })
+    scatter(
+      new THREE.CylinderGeometry(0.075, 0.075, 0.03, 24),
+      [new THREE.MeshStandardMaterial({ color: 0x2f5e24, roughness: 0.5 }), cucumberFlesh, cucumberFlesh],
+      9,
+      { from: 5.1, to: 6.2, inner: 0.32, lift: 0.05, tilt: 0.2 },
+    )
+    // Shredded red cabbage frames the toppings around the edge of the bowl.
+    const cabbageGeometry = new THREE.BoxGeometry(0.24, 0.012, 0.035, 10, 1, 1)
+    const cabbagePoints = cabbageGeometry.attributes.position
+    for (let i = 0; i < cabbagePoints.count; i++)
+      cabbagePoints.setZ(i, cabbagePoints.getZ(i) + 1.6 * cabbagePoints.getX(i) ** 2)
+    cabbageGeometry.computeVertexNormals()
+    scatter(
+      cabbageGeometry,
+      new THREE.MeshStandardMaterial({ color: 0x6e2a63, roughness: 0.45 }),
+      18,
+      { inner: 0.82, outer: 0.96, lift: 0.04, tilt: 0 },
+    )
+    scatter(
+      new THREE.SphereGeometry(0.012, 8, 6).scale(1.6, 0.7, 1),
+      new THREE.MeshStandardMaterial({ color: 0xf4ecd8, roughness: 0.5 }),
+      60,
+      { inner: 0.05, outer: 0.85, lift: 0.1, tilt: 0 },
+    )
+    // Two soft-boiled egg halves in the centre.
+    const eggWhite = new THREE.MeshPhysicalMaterial({ color: 0xfbf8f0, roughness: 0.3, clearcoat: 0.5 })
+    const yolk = new THREE.MeshPhysicalMaterial({ color: 0xf2a31d, roughness: 0.35, clearcoat: 0.6 })
+    const eggGeometry = new THREE.SphereGeometry(0.15, 32, 16).scale(1, 0.5, 1.3)
+    const yolkGeometry = new THREE.SphereGeometry(0.075, 24, 12).scale(1, 0.5, 1.1)
+    for (const side of [-1, 1]) {
+      const egg = new THREE.Group()
+      egg.position.set(side * 0.13, bedSurface(0.13) + 0.06, side * 0.04)
+      egg.rotation.set(side * 0.08, side * 0.3, 0)
+      addMesh(eggGeometry, eggWhite, egg)
+      addMesh(yolkGeometry, yolk, egg).position.y = 0.05
+      bowl.add(egg)
+    }
+
+    // ---------- Two small plates that circle the bowl ----------
+    // Two faint rings trace the path the small plates travel along.
+    const plateOrbit = 1.85
+    const ringGeometry = new THREE.TorusGeometry(1, 0.003, 6, 128)
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: 0xad4532,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    })
+    for (const radius of [plateOrbit, plateOrbit + 0.17]) {
+      const ring = addMesh(ringGeometry, ringMaterial, world, false)
+      ring.rotation.x = -Math.PI / 2
+      ring.scale.setScalar(radius)
+    }
+    const plateGeometry = dishGeometry([
       [0, 0],
       [0.66, 0],
       [0.82, 0.04],
@@ -219,243 +420,146 @@ onMounted(async () => {
       [0.86, 0.19],
       [0.7, 0.12],
       [0, 0.12],
-    ]
-    const plateGeometry = new THREE.LatheGeometry(
-      profile.map(([x, y]) => new THREE.Vector2(x, y)),
-      64,
-    )
-    const porcelain = new THREE.MeshPhysicalMaterial({
-      color: 0xf4eee4,
-      roughness: 0.35,
-      clearcoat: 1,
-      clearcoatRoughness: 0.12,
-    })
-    const ringGeometry = new THREE.TorusGeometry(1, 0.003, 6, 96)
-    const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xad4532,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-    })
-    for (const radius of [2.25, 2.42]) {
-      const ring = addMesh(ringGeometry, ringMaterial, world, false)
-      ring.rotation.x = -Math.PI / 2
-      ring.scale.setScalar(radius)
-    }
-
-    // Ingredients use textures cut from the same photos: seared tofu and lettuce.
-    const tofuGeometry = new RoundedBoxGeometry(0.34, 0.34, 0.34, 3, 0.05)
-    const tofuPhoto = cropPhoto(saladPhoto.clone(), [0.522, 0.636, 0.055, 0.055])
-    const tofuMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfbe6c8,
-      map: tofuPhoto,
-      bumpMap: tofuPhoto,
-      bumpScale: 3,
-      roughness: 0.6,
-    })
-    const tomatoGeometry = new THREE.SphereGeometry(0.18, 32, 20).scale(1, 0.88, 1)
-    const tomatoMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xc9321d,
-      roughness: 0.3,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08,
-    })
-    const leafShape = new THREE.Shape()
-    leafShape.moveTo(-0.27, 0)
-    leafShape.quadraticCurveTo(0, 0.24, 0.27, 0)
-    leafShape.quadraticCurveTo(0, -0.24, -0.27, 0)
-    const leafGeometry = new THREE.ShapeGeometry(leafShape, 12)
-    const leafPositions = leafGeometry.attributes.position
-    for (let i = 0; i < leafPositions.count; i++) {
-      const x = leafPositions.getX(i)
-      leafPositions.setZ(i, 0.1 * (1 - Math.abs(x) / 0.27))
-      leafGeometry.attributes.uv.setXY(i, (x + 0.27) / 0.54, leafPositions.getY(i) / 0.24 + 0.5)
-    }
-    leafGeometry.computeVertexNormals()
-    const leafPhoto = cropPhoto(buffetPhoto.clone(), [0.622, 0.833, 0.09, 0.12])
-    const leafMaterial = new THREE.MeshStandardMaterial({
-      map: leafPhoto,
-      roughness: 0.55,
-      side: THREE.DoubleSide,
-    })
-
-    // The base of each dish is a shallow dome textured with the real photo. A blurred copy
-    // of the photo lifts its surface into soft lumps, so it is not a flat disc.
-    const foodRadius = 0.82
-    const foodHeight = 0.1
-    const foodBase = 0.15
-    const sphereRadius = (foodRadius ** 2 + foodHeight ** 2) / (2 * foodHeight)
-    const foodGeometry = new THREE.SphereGeometry(
-      sphereRadius,
-      128,
-      48,
-      0,
-      Math.PI * 2,
-      0,
-      Math.asin(foodRadius / sphereRadius),
-    )
-    foodGeometry.translate(0, foodBase + foodHeight - sphereRadius, 0)
-    // Project the photo straight down so it is not stretched over the dome.
-    const foodPositions = foodGeometry.attributes.position
-    for (let i = 0; i < foodPositions.count; i++)
-      foodGeometry.attributes.uv.setXY(
-        i,
-        0.5 + foodPositions.getX(i) / (2 * foodRadius),
-        0.5 - foodPositions.getZ(i) / (2 * foodRadius),
-      )
-    const reliefScale = 0.07
-    const surfaceY = (radius) =>
-      foodBase + foodHeight - sphereRadius + Math.sqrt(sphereRadius ** 2 - radius ** 2)
-
-    // Thin shreds of red cabbage: a flat strip bent into a gentle curve.
-    const cabbageGeometry = new THREE.BoxGeometry(0.24, 0.012, 0.035, 10, 1, 1)
-    const cabbagePositions = cabbageGeometry.attributes.position
-    for (let i = 0; i < cabbagePositions.count; i++)
-      cabbagePositions.setZ(i, cabbagePositions.getZ(i) + 1.6 * cabbagePositions.getX(i) ** 2)
-    cabbageGeometry.computeVertexNormals()
-    const cucumberPhoto = cropPhoto(saladPhoto.clone(), [0.7, 0.356, 0.04, 0.04])
-
-    // 3D ingredients piled on top of the photo so each dish pops out of its plate.
-    // tilt: -π/2 lays flat pieces (leaves, onion rings) down on the food.
-    const ingredients = [
-      {
-        geometry: leafGeometry,
-        material: leafMaterial,
-        count: 22,
-        scale: 0.8,
-        lift: 0.04,
-        tilt: -Math.PI / 2,
-      },
-      { geometry: tofuGeometry, material: tofuMaterial, count: 9, scale: 0.5, lift: 0.09 },
-      { geometry: tomatoGeometry, material: tomatoMaterial, count: 8, scale: 0.55, lift: 0.1 },
-      {
-        geometry: new THREE.SphereGeometry(0.1, 24, 16).scale(1, 0.8, 1.3),
-        material: new THREE.MeshPhysicalMaterial({
-          color: 0xfbf8f0,
-          roughness: 0.35,
-          clearcoat: 0.6,
-        }),
-        count: 3,
-        lift: 0.1,
-      },
-      {
-        geometry: new THREE.SphereGeometry(0.045, 12, 8).scale(1, 0.8, 1.4),
-        material: new THREE.MeshStandardMaterial({ color: 0x86b04f, roughness: 0.45 }),
-        count: 18,
-        lift: 0.07,
-      },
-      {
-        geometry: new THREE.SphereGeometry(0.032, 10, 8),
-        material: new THREE.MeshPhysicalMaterial({
-          color: 0xf3c442,
-          roughness: 0.35,
-          clearcoat: 0.5,
-        }),
-        count: 28,
-        lift: 0.07,
-      },
-      {
-        geometry: new RoundedBoxGeometry(0.09, 0.09, 0.09, 2, 0.015),
-        material: new THREE.MeshStandardMaterial({ map: cucumberPhoto, roughness: 0.4 }),
-        count: 12,
-        lift: 0.07,
-      },
-      {
-        geometry: cabbageGeometry,
-        material: new THREE.MeshStandardMaterial({ color: 0x6e2a63, roughness: 0.45 }),
-        count: 14,
-        lift: 0.05,
-        tilt: 0,
-      },
-      {
-        geometry: new THREE.TorusGeometry(0.022, 0.008, 6, 16),
-        material: new THREE.MeshStandardMaterial({ color: 0x5f9e3a, roughness: 0.5 }),
-        count: 18,
-        lift: 0.07,
-        tilt: -Math.PI / 2,
-      },
-      {
-        geometry: new THREE.SphereGeometry(0.04, 14, 10),
-        material: new THREE.MeshStandardMaterial({ color: 0xd9b77a, roughness: 0.7 }),
-        count: 10,
-        lift: 0.07,
-      },
-      {
-        geometry: new RoundedBoxGeometry(0.1, 0.1, 0.1, 2, 0.02),
-        material: new THREE.MeshStandardMaterial({ color: 0xe0782f, roughness: 0.6 }),
-        count: 8,
-        lift: 0.08,
-      },
-    ]
-
-    // Each crop is the food inside the bowl or plate in that photo, without its rim.
-    const dishes = [
-      [saladPhoto, [0.496, 0.494, 0.311, 0.311]],
-      [mealPhoto, [0.542, 0.48, 0.167, 0.25]],
-      [buffetPhoto, [0.542, 0.513, 0.283, 0.425]],
-    ]
-    const transform = new THREE.Object3D()
-    const plates = dishes.map(([photo, crop], index) => {
+    ])
+    function smallPlate() {
       const plate = new THREE.Group()
-      plate.scale.setScalar(index === 0 ? 1.45 : 0.5)
+      plate.scale.setScalar(0.6)
       addMesh(plateGeometry, porcelain, plate)
-      const { map, relief } = dishTexture(photo, crop)
-      addMesh(
-        foodGeometry,
-        new THREE.MeshStandardMaterial({
-          map,
-          bumpMap: map,
-          bumpScale: 0.6,
-          displacementMap: relief,
-          displacementScale: reliefScale,
-          // A matte surface keeps reflections from greying out the photo.
-          roughness: 0.85,
-          envMapIntensity: 0.35,
-        }),
-        plate,
-      )
-      // Spread each ingredient in a sunflower spiral so the pile looks natural, not gridded.
-      ingredients.forEach((food, type) => {
-        const pieces = addMesh(food.geometry, food.material, plate, true, food.count)
-        for (let i = 0; i < food.count; i++) {
-          const angle = i * 2.4 + type * 1.6 + index * 0.5
-          const radius = Math.sqrt((i + 0.5) / food.count) * 0.7
-          const scale = food.scale ?? 1
-          transform.position.set(
-            Math.sin(angle) * radius,
-            surfaceY(radius) + reliefScale * 0.5 + food.lift * scale,
-            Math.cos(angle) * radius,
-          )
-          const tilt = food.tilt ?? 0.3
-          transform.rotation.set(tilt + Math.sin(i) * 0.25, angle, Math.cos(i) * 0.25)
-          transform.scale.setScalar(scale)
-          transform.updateMatrix()
-          pieces.setMatrixAt(i, transform.matrix)
-        }
-        pieces.instanceMatrix.needsUpdate = true
-      })
       world.add(plate)
       return plate
-    })
+    }
 
-    const garnish = [
-      { type: 'tofu', x: -2.1, y: 0.65, z: -1.1 },
-      { type: 'tofu', x: 2.1, y: 0.8, z: -0.9 },
-      { type: 'tofu', x: 0.3, y: 0.6, z: 2.45 },
-      { type: 'tomato', x: -2.25, y: 0.4, z: 1.2 },
-      { type: 'tomato', x: 1.9, y: 0.55, z: -1.75 },
-      { type: 'leaf', x: -1.55, y: 0.75, z: -1.9 },
-      { type: 'leaf', x: 2, y: 0.55, z: 1.7 },
-    ].map((item) => {
-      const geometry =
-        item.type === 'tofu' ? tofuGeometry : item.type === 'tomato' ? tomatoGeometry : leafGeometry
-      const material =
-        item.type === 'tofu' ? tofuMaterial : item.type === 'tomato' ? tomatoMaterial : leafMaterial
-      const mesh = addMesh(geometry, material)
-      mesh.position.set(item.x, item.y, item.z)
-      mesh.rotation.set(-0.5, 0.4, 0.3)
-      return { mesh, ...item }
+    // Glazed bread rolls topped with sesame.
+    const breadPlate = smallPlate()
+    const bunGeometry = new THREE.SphereGeometry(0.36, 40, 24).scale(1.1, 0.68, 0.92)
+    const bunMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xc9853f,
+      roughness: 0.5,
+      clearcoat: 0.45,
+      clearcoatRoughness: 0.35,
+      bumpMap: speckle,
+      bumpScale: 1.5,
     })
+    const seedGeometry = new THREE.SphereGeometry(0.018, 8, 6).scale(1.6, 0.6, 1)
+    const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xf6edd6, roughness: 0.5 })
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2 + 0.4
+      const bun = new THREE.Group()
+      bun.position.set(Math.cos(angle) * 0.34, 0.2, Math.sin(angle) * 0.34)
+      bun.rotation.y = angle
+      addMesh(bunGeometry, bunMaterial, bun)
+      const seeds = addMesh(seedGeometry, seedMaterial, bun, false, 12)
+      for (let s = 0; s < 12; s++) {
+        const seedAngle = random() * Math.PI * 2
+        const seedRadius = Math.sqrt(random()) * 0.26
+        transform.position.set(
+          Math.cos(seedAngle) * seedRadius,
+          0.235 - seedRadius * 0.35,
+          Math.sin(seedAngle) * seedRadius,
+        )
+        transform.rotation.set(0, random() * Math.PI, 0)
+        transform.scale.setScalar(1)
+        transform.updateMatrix()
+        seeds.setMatrixAt(s, transform.matrix)
+      }
+      breadPlate.add(bun)
+    }
+
+    // Orange slices fanned out beside a bunch of grapes.
+    const fruitPlate = smallPlate()
+    const orangeFlesh = new THREE.MeshStandardMaterial({ map: orangeFace, roughness: 0.35 })
+    const orangeSlice = new THREE.CylinderGeometry(0.3, 0.3, 0.07, 48)
+    const orangeRind = new THREE.MeshStandardMaterial({ color: 0xe8781f, roughness: 0.5 })
+    for (let i = 0; i < 3; i++) {
+      const slice = addMesh(orangeSlice, [orangeRind, orangeFlesh, orangeFlesh], fruitPlate)
+      slice.position.set(-0.42 + i * 0.2, 0.17 + i * 0.05, -0.05 + i * 0.06)
+      slice.rotation.set(0.12, 0, -0.32)
+    }
+    const grapes = addMesh(
+      new THREE.SphereGeometry(0.1, 24, 16),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        roughness: 0.22,
+        clearcoat: 1,
+        clearcoatRoughness: 0.1,
+      }),
+      fruitPlate,
+      true,
+      14,
+    )
+    // Three stacked layers make a small pyramid-shaped bunch.
+    const grapeLayers = [
+      [7, 0.22, 0.2],
+      [5, 0.14, 0.36],
+      [2, 0.07, 0.5],
+    ]
+    let grape = 0
+    for (const [count, radius, height] of grapeLayers) {
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + height
+        transform.position.set(0.32 + Math.cos(angle) * radius, height, 0.18 + Math.sin(angle) * radius)
+        transform.rotation.set(0, 0, 0)
+        transform.scale.setScalar(0.92 + random() * 0.16)
+        transform.updateMatrix()
+        grapes.setMatrixAt(grape, transform.matrix)
+        grapes.setColorAt(grape, tint.setHex(random() > 0.5 ? 0x5b2a63 : 0x6d3373))
+        grape++
+      }
+    }
+    grapes.instanceColor.needsUpdate = true
+    const smallPlates = [breadPlate, fruitPlate]
+
+    // ---------- Floating ingredients: tomatoes bounce, tofu hovers, leaves sway ----------
+    function cherryTomato() {
+      const tomato = new THREE.Group()
+      addMesh(tomatoGeometry, tomatoMaterial, tomato)
+      // Five little sepals and a stem make the green top.
+      const sepalGeometry = new THREE.BoxGeometry(0.06, 0.008, 0.016)
+      for (let i = 0; i < 5; i++) {
+        const sepal = addMesh(sepalGeometry, stemMaterial, tomato, false)
+        sepal.rotation.set(0, (i / 5) * Math.PI * 2, -0.25)
+        sepal.position.set(Math.cos((i / 5) * Math.PI * 2) * 0.025, 0.088, -Math.sin((i / 5) * Math.PI * 2) * 0.025)
+      }
+      addMesh(new THREE.CylinderGeometry(0.006, 0.008, 0.05, 8), stemMaterial, tomato, false).position.y =
+        0.11
+      tomato.traverse((part) => (part.castShadow = false))
+      tomato.scale.setScalar(1.7)
+      world.add(tomato)
+      return tomato
+    }
+    // Items high in the air cast no shadow; on the invisible floor it would look like a stray smudge.
+    function floatingLeaf(colour) {
+      const leaf = addMesh(
+        leafGeometry,
+        new THREE.MeshStandardMaterial({
+          color: colour,
+          map: veins,
+          roughness: 0.5,
+          side: THREE.DoubleSide,
+        }),
+        world,
+        false,
+      )
+      leaf.scale.setScalar(0.9)
+      return leaf
+    }
+    function floatingTofu() {
+      const tofu = addMesh(tofuGeometry, tofuMaterial, world, false)
+      tofu.scale.setScalar(1.6)
+      return tofu
+    }
+    // Tomatoes and leaves bob in place around the bowl, including the front;
+    // the three tofu cubes circle the bowl between the plates.
+    const floaters = [
+      { mesh: floatingTofu(), motion: 'tofu', x: 0, y: 0.6, z: 0 },
+      { mesh: floatingTofu(), motion: 'tofu', x: 0, y: 0.75, z: 0 },
+      { mesh: floatingTofu(), motion: 'tofu', x: 0, y: 0.55, z: 0 },
+      { mesh: cherryTomato(), motion: 'tomato', x: -2.15, y: 0.45, z: 1.1 },
+      { mesh: cherryTomato(), motion: 'tomato', x: 1.75, y: 0.6, z: -1.6 },
+      { mesh: floatingLeaf(0x6fae42), motion: 'sway', x: -1.45, y: 0.8, z: -1.7 },
+      { mesh: floatingLeaf(0x5c9a36), motion: 'sway', x: 1.8, y: 0.5, z: 1.55 },
+    ]
+    const tofuOrbit = plateOrbit + 0.08
 
     let elapsed = 0
     let previousTime = 0
@@ -467,30 +571,41 @@ onMounted(async () => {
       previousTime = time
       const mouseX = motionPreference.matches ? 0 : pointer.x
       const mouseY = motionPreference.matches ? 0 : pointer.y
+      // The whole scene tilts towards the mouse and sways slowly on its own.
       world.rotation.x += (mouseY * 0.16 + Math.sin(elapsed / 3) * 0.06 - world.rotation.x) * 0.12
       world.rotation.y += (mouseX * 0.28 - world.rotation.y) * 0.12
       world.rotation.z += (-0.12 - world.rotation.z) * 0.12
       world.position.x += (mouseX * 0.12 - world.position.x) * 0.12
-      const angle = (elapsed * Math.PI * 2) / 22 + 0.9
-      plates.forEach((plate, index) => {
-        if (index)
-          plate.position.set(
-            Math.sin(angle + (index - 1) * Math.PI) * 2.25,
-            0.18,
-            Math.cos(angle + (index - 1) * Math.PI) * 2.25,
-          )
-      })
-      garnish.forEach(({ mesh, x, y, z, type }, index) => {
-        mesh.position.set(
-          x,
-          y + (motionPreference.matches ? 0 : Math.sin(elapsed * 0.9 + index) * 0.09),
-          z,
+
+      // The bowl stays still; the two small plates ride the rings on opposite sides
+      // (one lap every 16 seconds) and spin on their own axes in opposite directions.
+      const angle = (elapsed * Math.PI * 2) / 16 + 0.9
+      smallPlates.forEach((plate, index) => {
+        plate.position.set(
+          Math.sin(angle + index * Math.PI) * plateOrbit,
+          0.12,
+          Math.cos(angle + index * Math.PI) * plateOrbit,
         )
-        if (type === 'tofu') {
+        plate.rotation.y = elapsed * 0.6 * (index ? -1 : 1)
+      })
+
+      floaters.forEach(({ mesh, motion, x, y, z }, index) => {
+        mesh.position.set(x, y + Math.sin(elapsed * 0.9 + index) * 0.09, z)
+        if (motion === 'tofu') {
+          // Tofu travels round the rings a quarter-turn away from the plates, tumbling as it goes.
           const phase = angle + Math.PI / 2 + (index % 2) * Math.PI + index * 0.18
-          mesh.position.x = Math.sin(phase) * 2.3
-          mesh.position.z = Math.cos(phase) * 2.3
+          mesh.position.x = Math.sin(phase) * tofuOrbit
+          mesh.position.z = Math.cos(phase) * tofuOrbit
           mesh.rotation.set(0.4 + elapsed * 0.18, elapsed * 0.25 + index, 0.3)
+        } else if (motion === 'tomato') {
+          mesh.rotation.set(Math.sin(elapsed * 0.6 + index) * 0.15, index, 0.15)
+        } else {
+          // Tilted back towards the camera so the leaf shows its face, not its edge.
+          mesh.rotation.set(
+            -0.55 + Math.sin(elapsed * 1.2 + index) * 0.2,
+            Math.sin(elapsed * 0.5 + index) * 0.3,
+            0.4 + Math.sin(elapsed * 0.7 + index) * 0.25,
+          )
         }
       })
       renderer.render(scene, camera)

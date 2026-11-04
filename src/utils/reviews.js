@@ -1,4 +1,5 @@
 import { explainError, supabase } from '@/utils/supabase'
+import { isDirectPhoto, photoUrl } from '@/utils/listings'
 
 // Review requests. Eligibility (one review per collected reservation) and who may
 // edit what are enforced by the database rules in 003_reviews.sql.
@@ -7,8 +8,7 @@ const SQL_FILE = '003_reviews.sql'
 const PHOTO_BUCKET = 'review-photos'
 
 export function reviewPhotoUrl(path) {
-  if (!path) return ''
-  return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl
+  return photoUrl(path, PHOTO_BUCKET)
 }
 
 export async function uploadReviewPhoto(file, userId) {
@@ -22,7 +22,7 @@ export async function uploadReviewPhoto(file, userId) {
 }
 
 export async function removeReviewPhoto(path) {
-  if (!path) return
+  if (!path || isDirectPhoto(path)) return
   await supabase.storage.from(PHOTO_BUCKET).remove([path])
 }
 
