@@ -12,6 +12,7 @@ import {
   discountedPinIcon,
   distanceKm,
   formatDistance,
+  getBrowserPosition,
   listingCoords,
   pinIcon,
 } from '@/utils/map'
@@ -109,25 +110,22 @@ const visible = computed(() => {
   return results.sort((a, b) => (a.km ?? 0) - (b.km ?? 0))
 })
 
-function locate() {
+async function locate() {
   if (!navigator.geolocation) {
     locationError.value = 'Your browser cannot share its location.'
     return
   }
   locating.value = true
   locationError.value = ''
-  navigator.geolocation.getCurrentPosition(
-    ({ coords }) => {
-      here.value = { lat: coords.latitude, lng: coords.longitude }
-      if (!radiusKm.value) radiusKm.value = 2
-      locating.value = false
-    },
-    () => {
-      locationError.value = 'Location is off, so listings are not sorted by distance.'
-      locating.value = false
-    },
-    { enableHighAccuracy: true, timeout: 10000 },
-  )
+  try {
+    const { coords } = await getBrowserPosition({ enableHighAccuracy: true, timeout: 10000 })
+    here.value = { lat: coords.latitude, lng: coords.longitude }
+    if (!radiusKm.value) radiusKm.value = 2
+  } catch {
+    locationError.value = 'Location is off, so listings are not sorted by distance.'
+  } finally {
+    locating.value = false
+  }
 }
 
 function priceText(listing) {

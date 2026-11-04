@@ -83,6 +83,13 @@ export function distanceKm(a, b) {
   return 6371 * 2 * Math.asin(Math.sqrt(h))
 }
 
+/** The browser's position as a promise, so pages can await it inside try/catch. */
+export function getBrowserPosition(options) {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options)
+  })
+}
+
 export function formatDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`
 }

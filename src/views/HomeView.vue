@@ -8,7 +8,7 @@ import ListingCard from '@/components/listings/ListingCard.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
-import { distanceKm, listingCoords } from '@/utils/map'
+import { distanceKm, getBrowserPosition, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
@@ -71,16 +71,6 @@ function cardDistance(listing) {
   return distanceKm(userLocation.value, coords)
 }
 
-function getBrowserLocation() {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 5 * 60 * 1000,
-    })
-  })
-}
-
 const BLOCKED_MESSAGE =
   'Location is blocked for this site. Click the icon left of the address bar, set Location to Allow, then choose "Nearest to me" again.'
 
@@ -119,7 +109,11 @@ async function locateUser() {
   // This call shows the browser's "Allow location?" popup when the user has not decided yet.
   locating.value = true
   try {
-    const position = await getBrowserLocation()
+    const position = await getBrowserPosition({
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 5 * 60 * 1000,
+    })
     userLocation.value = { lat: position.coords.latitude, lng: position.coords.longitude }
   } catch (err) {
     // err.code 1 means the user (or browser settings) blocked location access.
