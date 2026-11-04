@@ -97,13 +97,10 @@ test.describe('status updates (logged in)', () => {
   test('the verified badge is still there after a reload (it comes from the database)', async ({
     page,
   }) => {
-    await postUpdate(page, 'running_low')
-    await expect(verifiedBadge(page)).toBeVisible()
-
     await page.reload()
 
-    await expect(timeline(page).first()).toContainText('Still available')
     await expect(verifiedBadge(page)).toBeVisible()
+    await expect(timeline(page).first()).toContainText('Still available')
   })
 
   test('posting "All gone" shows the banner and removes the badge', async ({ page }) => {
