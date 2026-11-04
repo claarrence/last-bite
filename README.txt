@@ -65,6 +65,8 @@ optional distance limit. "Nearest to me" on the homepage sorts the food grid
 by straight-line distance and shows it on each card.
 The map starts at Any distance; the distance dropdown narrows it only when chosen.
 Cards, the posting preview and listing details show a food emoji without a photo.
+Presentation food photos are bundled in public/images/presentation; source,
+author and licence details are in public/images/presentation/credits.txt.
 
 
 DATA STORE
