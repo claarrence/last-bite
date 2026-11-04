@@ -8,7 +8,7 @@ import ListingCard from '@/components/listings/ListingCard.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
-import { distanceKm, listingCoords } from '@/utils/map'
+import { distanceKm, getBrowserPosition, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
@@ -71,16 +71,6 @@ function cardDistance(listing) {
   return distanceKm(userLocation.value, coords)
 }
 
-function getBrowserLocation() {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: 10000,
-      maximumAge: 5 * 60 * 1000,
-    })
-  })
-}
-
 const BLOCKED_MESSAGE =
   'Location is blocked for this site. Click the icon left of the address bar, set Location to Allow, then choose "Nearest to me" again.'
 
@@ -119,7 +109,11 @@ async function locateUser() {
   // This call shows the browser's "Allow location?" popup when the user has not decided yet.
   locating.value = true
   try {
-    const position = await getBrowserLocation()
+    const position = await getBrowserPosition({
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 5 * 60 * 1000,
+    })
     userLocation.value = { lat: position.coords.latitude, lng: position.coords.longitude }
   } catch (err) {
     // err.code 1 means the user (or browser settings) blocked location access.
@@ -195,12 +189,7 @@ onUnmounted(() => clearInterval(timer))
       <div
         class="browse-heading d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3"
       >
-        <div>
-          <h2 class="mb-0">Browse food</h2>
-          <p v-if="!loading && !error" class="small text-secondary mt-2 mb-0" role="status">
-            {{ visibleListings.length }} listing{{ visibleListings.length === 1 ? '' : 's' }}
-          </p>
-        </div>
+        <h2 class="mb-0">Browse food</h2>
         <div class="browse-search">
           <label for="food-search" class="visually-hidden">Search food or pickup location</label>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -214,6 +203,36 @@ onUnmounted(() => clearInterval(timer))
             class="form-control"
             placeholder="Search food or pickup location"
           />
+        </div>
+      </div>
+      <!-- Listing count on the left, sort menu on the far right. -->
+      <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+        <p class="small text-secondary mb-0" role="status">
+          <template v-if="!loading && !error">
+            {{ visibleListings.length }} listing{{ visibleListings.length === 1 ? '' : 's' }}
+          </template>
+        </p>
+        <div class="sort-control d-flex align-items-center gap-2">
+          <label for="food-sort" title="Sort by">
+            <span class="visually-hidden">Sort by</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z" /></svg>
+          </label>
+          <span
+            v-if="locating"
+            class="spinner-border spinner-border-sm text-success"
+            role="status"
+            aria-label="Finding your location"
+          ></span>
+          <select
+            id="food-sort"
+            v-model="filters.sortBy"
+            class="form-select form-select-sm w-auto"
+            :disabled="locating"
+          >
+            <option value="newest">Newest first</option>
+            <option value="ending">Pickup ending soon</option>
+            <option value="nearest">Nearest to me</option>
+          </select>
         </div>
       </div>
       <div
@@ -232,32 +251,13 @@ onUnmounted(() => clearInterval(timer))
             {{ type.label }}
           </button>
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-          <router-link
-            :to="{ name: 'listings-map' }"
-            class="btn btn-sm btn-outline-success text-nowrap"
-            data-testid="open-map"
-          >
-            <span aria-hidden="true">📍</span> View on map
-          </router-link>
-          <label for="food-sort" class="small text-secondary text-nowrap">Sort by</label>
-          <span
-            v-if="locating"
-            class="spinner-border spinner-border-sm text-success"
-            role="status"
-            aria-label="Finding your location"
-          ></span>
-          <select
-            id="food-sort"
-            v-model="filters.sortBy"
-            class="form-select form-select-sm w-auto"
-            :disabled="locating"
-          >
-            <option value="newest">Newest first</option>
-            <option value="ending">Pickup ending soon</option>
-            <option value="nearest">Nearest to me</option>
-          </select>
-        </div>
+        <router-link
+          :to="{ name: 'listings-map' }"
+          class="btn btn-sm btn-outline-success text-nowrap"
+          data-testid="open-map"
+        >
+          <span aria-hidden="true">📍</span> View on map
+        </router-link>
       </div>
       <FilterBar />
       <div
@@ -400,6 +400,15 @@ onUnmounted(() => clearInterval(timer))
   padding-left: 44px;
   background: var(--color-paper);
   font-size: 14px;
+}
+/* Funnel icon labels the sort menu. */
+.sort-control svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--color-muted);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
 }
 .browse-controls {
   padding-bottom: 20px;

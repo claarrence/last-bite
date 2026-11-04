@@ -26,14 +26,14 @@ export function formatPrice(price) {
 }
 
 // Local 'YYYY-MM-DD' and 'HH:MM' strings for date/time inputs.
+const pad = (n) => String(n).padStart(2, '0')
+
 export function toDateInput(value) {
   const d = new Date(value)
-  const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 export function toTimeInput(value) {
   const d = new Date(value)
-  const pad = (n) => String(n).padStart(2, '0')
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

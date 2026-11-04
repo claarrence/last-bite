@@ -240,7 +240,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
           }}
         </p>
 
-        <p v-if="listing.description" class="text-break" style="white-space: pre-line">
+        <p v-if="listing.description" class="listing-description text-break">
           {{ listing.description }}
         </p>
 
@@ -266,7 +266,8 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
           >
         </p>
 
-        <dl class="row small mb-3">
+        <div class="detail-card mb-3">
+        <dl class="row mb-0">
           <dt class="col-sm-4">Pickup window</dt>
           <dd class="col-sm-8">
             {{ formatPickupWindow(listing.pickup_start, listing.pickup_end) }}
@@ -304,6 +305,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
             </span>
           </dd>
         </dl>
+        </div>
 
         <div
           v-if="isOwner"
@@ -374,3 +376,45 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
     </p>
   </ConfirmDialog>
 </template>
+
+<style scoped>
+.listing-description {
+  white-space: pre-line;
+  line-height: 1.7;
+}
+/* The pickup details sit in a soft card so each label and value is easy to scan. */
+.detail-card {
+  padding: 18px 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-paper);
+  font-size: 14px;
+}
+.detail-card dt {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+.detail-card dd {
+  margin-bottom: 14px;
+}
+.detail-card dd:last-of-type {
+  margin-bottom: 0;
+}
+/* On phones each label sits above its value, with a divider between items. */
+@media (max-width: 575px) {
+  .detail-card dt {
+    margin-bottom: 4px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .detail-card dd {
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .detail-card dd:last-of-type {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+</style>
