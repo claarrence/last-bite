@@ -5,18 +5,21 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import HomeFoodScene from '@/components/HomeFoodScene.vue'
 import PostFoodButton from '@/components/PostFoodButton.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
+import { useFiltersStore } from '@/stores/filters'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
 import { distanceKm, getBrowserPosition, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
+import FilterBar from '@/components/FilterBar.vue'
 
 const logo = ref(null)
 const navbar = ref(null)
 const foodScene = ref(null)
 const { homeHref, goHome, homeEntrance } = useHomeNavigation()
 const { active, navOpacity, logoStyle, foodStyle } = useLandingMotion(logo, navbar)
+const filters = useFiltersStore()
 
 // Replay the entrance without rebuilding the WebGL scene.
 watch(homeEntrance, () => {
@@ -29,9 +32,6 @@ watch(homeEntrance, () => {
 const listings = ref([])
 const loading = ref(true)
 const error = ref('')
-const query = ref('')
-const foodType = ref('all')
-const sortBy = ref('newest')
 const now = ref(new Date())
 let timer
 
@@ -49,15 +49,12 @@ const availableListings = computed(() =>
   listings.value.filter((listing) => displayStatus(listing, now.value) === 'open'),
 )
 const visibleListings = computed(() => {
-  const search = query.value.trim().toLowerCase()
   const results = availableListings.value.filter((listing) => {
-    const matchesType = foodType.value === 'all' || listing.listing_type === foodType.value
-    const details = `${listing.title} ${listing.address} ${listing.description || ''}`.toLowerCase()
-    return matchesType && details.includes(search)
+    return filters.matchesFunction(listing, now.value)
   })
-  if (sortBy.value === 'ending') {
+  if (filters.sortBy === 'ending') {
     results.sort((a, b) => new Date(a.pickup_end) - new Date(b.pickup_end))
-  } else if (sortBy.value === 'nearest' && userLocation.value) {
+  } else if (filters.sortBy === 'nearest' && userLocation.value) {
     // Listings without map coordinates go last.
     results.sort((a, b) => (cardDistance(a) ?? Infinity) - (cardDistance(b) ?? Infinity))
   }
@@ -68,7 +65,7 @@ const visibleListings = computed(() => {
 // Only shown on cards while sorting by nearest.
 function cardDistance(listing) {
   const coords = listingCoords(listing)
-  if (sortBy.value !== 'nearest' || !userLocation.value || !coords) return null
+  if (filters.sortBy !== 'nearest' || !userLocation.value || !coords) return null
   return distanceKm(userLocation.value, coords)
 }
 
@@ -90,21 +87,21 @@ async function locateUser() {
   locationError.value = ''
   if (!('geolocation' in navigator)) {
     locationError.value = 'Your browser cannot share its location, so listings stay newest first.'
-    sortBy.value = 'newest'
+    filters.sortBy = 'newest'
     return
   }
   // Browsers only allow location on HTTPS or localhost, and never show the popup there.
   if (!window.isSecureContext) {
     locationError.value =
       'Location needs a secure (https://) connection. Open LastBite over HTTPS to sort by distance.'
-    sortBy.value = 'newest'
+    filters.sortBy = 'newest'
     return
   }
   // Once location is blocked for this site, the browser will not ask again,
   // so explain how to turn it back on instead of failing silently.
   if (await isLocationBlocked()) {
     locationError.value = BLOCKED_MESSAGE
-    sortBy.value = 'newest'
+    filters.sortBy = 'newest'
     return
   }
   // This call shows the browser's "Allow location?" popup when the user has not decided yet.
@@ -120,7 +117,7 @@ async function locateUser() {
     // err.code 1 means the user (or browser settings) blocked location access.
     locationError.value =
       err.code === 1 ? BLOCKED_MESSAGE : 'Could not find your location. Please try again.'
-    sortBy.value = 'newest'
+    filters.sortBy = 'newest'
   } finally {
     locating.value = false
   }
@@ -128,13 +125,16 @@ async function locateUser() {
 
 // The warning is not cleared here: a failed lookup switches back to "newest",
 // which would otherwise hide the message straight away.
-watch(sortBy, (value) => {
-  if (value === 'nearest' && !userLocation.value) locateUser()
-})
+watch(
+  () => filters.sortBy,
+  (value) => {
+    if (value === 'nearest' && !userLocation.value) locateUser()
+  },
+  { immediate: true },
+)
 
 function clearFilters() {
-  query.value = ''
-  foodType.value = 'all'
+  filters.clearAllFunction()
 }
 
 async function loadListings() {
@@ -198,7 +198,7 @@ onUnmounted(() => clearInterval(timer))
           </svg>
           <input
             id="food-search"
-            v-model="query"
+            v-model="filters.query"
             type="search"
             class="form-control"
             placeholder="Search food or pickup location"
@@ -215,7 +215,9 @@ onUnmounted(() => clearInterval(timer))
         <div class="sort-control d-flex align-items-center gap-2">
           <label for="food-sort" title="Sort by">
             <span class="visually-hidden">Sort by</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z" />
+            </svg>
           </label>
           <span
             v-if="locating"
@@ -225,7 +227,7 @@ onUnmounted(() => clearInterval(timer))
           ></span>
           <select
             id="food-sort"
-            v-model="sortBy"
+            v-model="filters.sortBy"
             class="form-select form-select-sm w-auto"
             :disabled="locating"
           >
@@ -244,9 +246,9 @@ onUnmounted(() => clearInterval(timer))
             :key="type.value"
             type="button"
             class="btn btn-sm flex-fill text-nowrap"
-            :aria-pressed="foodType === type.value"
-            :class="foodType === type.value ? 'btn-success' : 'text-secondary'"
-            @click="foodType = type.value"
+            :aria-pressed="filters.foodType === type.value"
+            :class="filters.foodType === type.value ? 'btn-success' : 'text-secondary'"
+            @click="filters.foodType = type.value"
           >
             {{ type.label }}
           </button>
@@ -259,7 +261,10 @@ onUnmounted(() => clearInterval(timer))
           <span aria-hidden="true">📍</span> View on map
         </router-link>
       </div>
+
       <!-- TODO (Ryan): show the filter checkboxes and chips here -->
+      <FilterBar />
+
       <div
         v-if="locationError"
         class="alert alert-warning d-flex justify-content-between align-items-start gap-2 py-2 small"

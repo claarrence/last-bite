@@ -3,8 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import L from 'leaflet'
 import NavBar from '@/components/NavBar.vue'
+import FilterBar from '@/components/FilterBar.vue'
 import { getAvailableListings } from '@/utils/listings'
 import { formatPickupWindow, formatPrice } from '@/utils/format'
+import { useFiltersStore } from '@/stores/filters'
 import {
   createOneMap,
   discountedPinIcon,
@@ -20,15 +22,16 @@ const router = useRouter()
 const listings = ref([])
 const loading = ref(true)
 const error = ref('')
-const filter = ref('all')
 const radiusKm = ref(0) // 0 = any distance
+const mapSort = ref('nearest')
 const here = ref(null) // { lat, lng } once the browser shares a location
 const locating = ref(false)
 const locationError = ref('')
 const selectedId = ref(null)
+const filters = useFiltersStore()
 
 // Same labels as the Browse food section on the homepage.
-const filters = [
+const foodTypes = [
   { value: 'all', label: 'All food' },
   { value: 'free', label: 'Free buffet' },
   { value: 'discounted', label: 'Reservation food' },
@@ -88,13 +91,17 @@ const pinned = computed(() =>
 )
 const unpinnedCount = computed(() => listings.value.length - pinned.value.length)
 
-// Nearest first once the user's position is known.
-const visible = computed(() =>
-  pinned.value
-    .filter(({ listing }) => filter.value === 'all' || listing.listing_type === filter.value)
+// Nearest first once the user's position is known, unless sorted by pickup deadline.
+const visible = computed(() => {
+  const results = pinned.value
+    .filter(({ listing }) => filters.matchesFunction(listing, new Date()))
     .filter(({ km }) => !radiusKm.value || km == null || km <= radiusKm.value)
-    .sort((a, b) => (a.km ?? 0) - (b.km ?? 0)),
-)
+
+  if (mapSort.value === 'ending') {
+    return results.sort((a, b) => new Date(a.listing.pickup_end) - new Date(b.listing.pickup_end))
+  }
+  return results.sort((a, b) => (a.km ?? 0) - (b.km ?? 0))
+})
 
 async function locate() {
   if (!navigator.geolocation) {
@@ -227,18 +234,26 @@ watch(here, drawHere)
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
       <div class="food-types d-flex p-1 border rounded-3" role="group" aria-label="Food type">
         <button
-          v-for="option in filters"
+          v-for="option in foodTypes"
           :key="option.value"
           type="button"
           class="btn btn-sm flex-fill text-nowrap"
-          :aria-pressed="filter === option.value"
-          :class="filter === option.value ? 'btn-success' : 'text-secondary'"
-          @click="filter = option.value"
+          :aria-pressed="filters.foodType === option.value"
+          :class="filters.foodType === option.value ? 'btn-success' : 'text-secondary'"
+          @click="filters.foodType = option.value"
         >
           {{ option.label }}
         </button>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex flex-wrap gap-2">
+        <select
+          v-model="mapSort"
+          class="form-select form-select-sm w-auto"
+          aria-label="Sort map list"
+        >
+          <option value="nearest">Nearest first</option>
+          <option value="ending">Pickup ending soon</option>
+        </select>
         <select
           v-model.number="radiusKm"
           class="form-select form-select-sm w-auto distance-select"
@@ -247,6 +262,7 @@ watch(here, drawHere)
         >
           <option v-for="r in radii" :key="r.value" :value="r.value">{{ r.label }}</option>
         </select>
+
         <button
           type="button"
           class="btn btn-sm btn-success text-nowrap"
@@ -262,6 +278,8 @@ watch(here, drawHere)
         </button>
       </div>
     </div>
+
+    <FilterBar />
 
     <div v-if="locationError" class="alert alert-warning py-2 small" role="status">
       {{ locationError }}
