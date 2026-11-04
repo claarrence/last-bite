@@ -3,8 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import L from 'leaflet'
 import NavBar from '@/components/NavBar.vue'
-import FilterBar from '@/components/FilterBar.vue'
-import { useFiltersStore } from '@/stores/filters'
 import { getAvailableListings } from '@/utils/listings'
 import { formatPickupWindow, formatPrice } from '@/utils/format'
 import {
@@ -18,24 +16,19 @@ import {
 } from '@/utils/map'
 
 const router = useRouter()
-// Same store as the Browse section, so filters chosen there apply here too.
-const filters = useFiltersStore()
 
 const listings = ref([])
 const loading = ref(true)
 const error = ref('')
+const filter = ref('all')
 const radiusKm = ref(0) // 0 = any distance
 const here = ref(null) // { lat, lng } once the browser shares a location
 const locating = ref(false)
 const locationError = ref('')
 const selectedId = ref(null)
-// The map keeps its own order: distance is what matters on a map, so it starts nearest first.
-const mapSort = ref('nearest')
-const now = ref(new Date()) // for the "Available now" filter
-let timer
 
 // Same labels as the Browse food section on the homepage.
-const foodTypes = [
+const filters = [
   { value: 'all', label: 'All food' },
   { value: 'free', label: 'Free buffet' },
   { value: 'discounted', label: 'Reservation food' },
@@ -70,14 +63,10 @@ onMounted(() => {
   listingLayer = L.layerGroup().addTo(map)
   locate()
   loadListings()
-  timer = setInterval(() => {
-    now.value = new Date()
-  }, 30_000)
 })
 
 // stop() ends a pin's flyTo animation before the map is removed.
 onBeforeUnmount(() => {
-  clearInterval(timer)
   map?.stop()
   map?.remove()
 })
@@ -99,16 +88,13 @@ const pinned = computed(() =>
 )
 const unpinnedCount = computed(() => listings.value.length - pinned.value.length)
 
-// Nearest first once the user's position is known, unless sorted by pickup deadline.
-const visible = computed(() => {
-  const results = pinned.value
-    .filter(({ listing }) => filters.matchesFunction(listing, now.value))
+// Nearest first once the user's position is known.
+const visible = computed(() =>
+  pinned.value
+    .filter(({ listing }) => filter.value === 'all' || listing.listing_type === filter.value)
     .filter(({ km }) => !radiusKm.value || km == null || km <= radiusKm.value)
-  if (mapSort.value === 'ending') {
-    return results.sort((a, b) => new Date(a.listing.pickup_end) - new Date(b.listing.pickup_end))
-  }
-  return results.sort((a, b) => (a.km ?? 0) - (b.km ?? 0))
-})
+    .sort((a, b) => (a.km ?? 0) - (b.km ?? 0)),
+)
 
 async function locate() {
   if (!navigator.geolocation) {
@@ -241,26 +227,18 @@ watch(here, drawHere)
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
       <div class="food-types d-flex p-1 border rounded-3" role="group" aria-label="Food type">
         <button
-          v-for="option in foodTypes"
+          v-for="option in filters"
           :key="option.value"
           type="button"
           class="btn btn-sm flex-fill text-nowrap"
-          :aria-pressed="filters.foodType === option.value"
-          :class="filters.foodType === option.value ? 'btn-success' : 'text-secondary'"
-          @click="filters.foodType = option.value"
+          :aria-pressed="filter === option.value"
+          :class="filter === option.value ? 'btn-success' : 'text-secondary'"
+          @click="filter = option.value"
         >
           {{ option.label }}
         </button>
       </div>
-      <div class="d-flex flex-wrap gap-2">
-        <select
-          v-model="mapSort"
-          class="form-select form-select-sm w-auto"
-          aria-label="Sort map list"
-        >
-          <option value="nearest">Nearest first</option>
-          <option value="ending">Pickup ending soon</option>
-        </select>
+      <div class="d-flex gap-2">
         <select
           v-model.number="radiusKm"
           class="form-select form-select-sm w-auto distance-select"
@@ -284,8 +262,6 @@ watch(here, drawHere)
         </button>
       </div>
     </div>
-
-    <FilterBar />
 
     <div v-if="locationError" class="alert alert-warning py-2 small" role="status">
       {{ locationError }}
@@ -316,27 +292,16 @@ watch(here, drawHere)
             </p>
             <div v-if="!visible.length" class="text-center py-4">
               <p class="mb-2">
-                No {{ filters.activeTagsComputed.length ? 'matching ' : '' }}food
-                {{ here && radiusKm ? `within ${radiusKm} km` : 'on the map' }} right now.
+                No food {{ here && radiusKm ? `within ${radiusKm} km` : 'on the map' }} right now.
               </p>
-              <div class="d-flex flex-wrap justify-content-center gap-2">
-                <button
-                  v-if="here && radiusKm"
-                  type="button"
-                  class="btn btn-sm btn-outline-success"
-                  @click="radiusKm = 0"
-                >
-                  Show any distance
-                </button>
-                <button
-                  v-if="filters.activeTagsComputed.length"
-                  type="button"
-                  class="btn btn-sm btn-outline-success"
-                  @click="filters.clearAllFunction()"
-                >
-                  Clear filters
-                </button>
-              </div>
+              <button
+                v-if="here && radiusKm"
+                type="button"
+                class="btn btn-sm btn-outline-success"
+                @click="radiusKm = 0"
+              >
+                Show any distance
+              </button>
             </div>
             <div class="nearby-items">
               <button
