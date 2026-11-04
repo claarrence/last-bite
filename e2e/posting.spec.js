@@ -39,6 +39,7 @@ for (const width of [375, 768, 1200]) {
     await page.getByTestId('price').fill('3.50')
     await page.getByTestId('quantity').fill('8')
     const preview = page.getByTestId('preview')
+    await expect(preview.getByRole('img', { name: 'Food', exact: true })).toBeVisible()
     await expect(preview.getByTestId('card-title')).toHaveText('Surplus lunch boxes')
     await expect(preview.getByTestId('card-price')).toHaveText('S$3.50')
     await expect(preview.getByTestId('card-quantity')).toHaveText('8 portions')

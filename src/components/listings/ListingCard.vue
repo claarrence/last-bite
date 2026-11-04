@@ -77,8 +77,8 @@ const allergens = computed(() => props.listing.allergens ?? [])
         :alt="listing.title || 'Listing photo'"
         class="object-fit-cover"
       />
-      <div v-else class="d-flex align-items-center justify-content-center text-secondary small">
-        No photo
+      <div v-else class="d-flex align-items-center justify-content-center bg-warning-subtle">
+        <span role="img" aria-label="Food" style="font-size: 4rem">🍱</span>
       </div>
     </div>
 

@@ -33,10 +33,10 @@ const filters = [
   { value: 'discounted', label: 'Reservation food' },
 ]
 const radii = [
+  { value: 0, label: 'Any distance' },
   { value: 1, label: 'Within 1 km' },
   { value: 2, label: 'Within 2 km' },
   { value: 5, label: 'Within 5 km' },
-  { value: 0, label: 'Any distance' },
 ]
 
 const el = ref(null)
@@ -105,7 +105,6 @@ function locate() {
   navigator.geolocation.getCurrentPosition(
     ({ coords }) => {
       here.value = { lat: coords.latitude, lng: coords.longitude }
-      if (!radiusKm.value) radiusKm.value = 2
       locating.value = false
     },
     () => {
@@ -240,10 +239,10 @@ watch(here, drawHere)
           {{ option.label }}
         </button>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex flex-wrap gap-2">
         <select
           v-model.number="radiusKm"
-          class="form-select form-select-sm w-auto"
+          class="form-select form-select-sm w-auto flex-shrink-0"
           :disabled="!here"
           aria-label="Distance"
         >

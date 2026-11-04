@@ -185,8 +185,8 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
             :alt="listing.title"
             class="object-fit-cover w-100 h-100"
           />
-          <div v-else class="d-flex align-items-center justify-content-center text-secondary small">
-            No photo
+          <div v-else class="d-flex align-items-center justify-content-center bg-warning-subtle">
+            <span role="img" aria-label="Food" style="font-size: 4rem">🍱</span>
           </div>
         </div>
 

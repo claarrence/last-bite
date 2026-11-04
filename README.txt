@@ -63,6 +63,8 @@ The /map page (NearbyMapView.vue, "View on map" on the homepage) shows open
 listings as pins, nearest first once the browser shares a location, with an
 optional distance limit. "Nearest to me" on the homepage sorts the food grid
 by straight-line distance and shows it on each card.
+The map starts at Any distance; the distance dropdown narrows it only when chosen.
+Cards, the posting preview and listing details show a food emoji without a photo.
 
 
 DATA STORE

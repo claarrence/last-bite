@@ -204,3 +204,33 @@ for (const width of [375, 1200]) {
     await expect(page.getByRole('heading', { name: 'Browse food' })).toBeVisible()
   })
 }
+
+test('the map starts at any distance and keeps the chosen radius when location updates', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['geolocation'])
+  await context.setGeolocation({ latitude: 1.2966, longitude: 103.8502 })
+  await page.route('https://www.onemap.gov.sg/maps/tiles/**', (route) => route.abort())
+  await page.route('**/rest/v1/listings*', (route) =>
+    route.fulfill({
+      json: [
+        { ...listings[0], lat: 1.2966, lng: 103.8502 },
+        { ...listings[1], lat: 1.2803, lng: 103.8448 },
+      ],
+    }),
+  )
+  await page.goto('/map')
+  const distance = page.getByRole('combobox', { name: 'Distance', exact: true })
+  await expect(page.getByRole('button', { name: 'Update location' })).toBeVisible()
+  await expect(distance).toHaveValue('0')
+  await expect(page.getByTestId('map-list-item')).toHaveCount(2)
+  await distance.selectOption('1')
+  await expect(page.getByTestId('map-list-item')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Update location' }).click()
+  await expect(distance).toHaveValue('1')
+  await distance.selectOption('0')
+  await page.getByRole('button', { name: 'Update location' }).click()
+  await expect(distance).toHaveValue('0')
+  await expect(page.getByTestId('map-list-item')).toHaveCount(2)
+})
