@@ -1,25 +1,12 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-import { SINGAPORE, SINGAPORE_BOUNDS } from '@/utils/map'
-
-// A plain L.icon is used because
-// L.Icon.Default prefixes its own image path onto the URL, which breaks Vite asset/data URLs.
-const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-  <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z"
-    fill="#ad4532" stroke="#873325" stroke-width="1"/>
-  <circle cx="12.5" cy="12.5" r="4.5" fill="#fff"/>
-</svg>`
-const pinIcon = L.icon({
-  iconUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  tooltipAnchor: [16, -28],
-  shadowSize: [41, 41],
-})
+import {
+  addOneMapTiles,
+  discountedPinIcon as pinIcon,
+  SINGAPORE,
+  SINGAPORE_BOUNDS,
+} from '@/utils/map'
 
 // results: OneMap search results shown as grey dots. lat/lng: the chosen pickup spot.
 // Emits `pick` with { lat, lng, address? }: address is set when a search result was clicked,
@@ -48,14 +35,7 @@ onMounted(() => {
     minZoom: 11,
     maxBounds: L.latLngBounds(SINGAPORE_BOUNDS),
   })
-  tiles = L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    detectRetina: true,
-    attribution:
-      '<img src="https://www.onemap.gov.sg/web-assets/images/logo/om_logo.png" style="height:20px;width:20px;"/>&nbsp;' +
-      '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a>&nbsp;&copy;&nbsp;contributors' +
-      '&nbsp;&#124;&nbsp;<a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
-  }).addTo(map)
+  tiles = addOneMapTiles(map)
   tiles.on('tileerror', () => {
     tileError.value = true
   })

@@ -2,15 +2,15 @@ import { supabase } from '@/utils/supabase'
 
 const PHOTO_BUCKET = 'listing-photos'
 
-// Demo listings (supabase/seed_demo.sql) use photos bundled in public/images.
-function isBundledPhoto(path) {
-  return path.startsWith('/images/')
+// Bundled images and online links can be used directly as an image source.
+export function isDirectPhoto(path) {
+  return path.startsWith('/images/') || /^https?:\/\//i.test(path)
 }
 
-export function photoUrl(path) {
+export function photoUrl(path, bucket = PHOTO_BUCKET) {
   if (!path) return ''
-  if (isBundledPhoto(path)) return path
-  return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl
+  if (isDirectPhoto(path)) return path
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
 }
 
 // 'open' | 'closed' | 'expired'. Expiry is computed rather than stored.
@@ -31,7 +31,7 @@ export async function uploadListingPhoto(file, userId) {
 }
 
 export async function removeListingPhoto(path) {
-  if (!path || isBundledPhoto(path)) return
+  if (!path || isDirectPhoto(path)) return
   await supabase.storage.from(PHOTO_BUCKET).remove([path])
 }
 

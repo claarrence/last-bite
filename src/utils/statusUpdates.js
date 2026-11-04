@@ -1,7 +1,13 @@
 import { supabase } from '@/utils/supabase'
+import { photoUrl } from '@/utils/listings'
 
 export const UPDATE_OPTIONS = [
-  { value: 'still_available', label: 'Still available', badge: 'badge-green', btn: 'btn-outline-success' },
+  {
+    value: 'still_available',
+    label: 'Still available',
+    badge: 'badge-green',
+    btn: 'btn-outline-success',
+  },
   { value: 'running_low', label: 'Running low', badge: 'badge-peach', btn: 'btn-outline-warning' },
   { value: 'all_gone', label: 'All gone', badge: 'badge-grey', btn: 'btn-outline-secondary' },
 ]
@@ -30,7 +36,6 @@ export function timeAgo(iso, now = new Date()) {
   return `${Math.floor(hrs / 24)} d ago`
 }
 
-
 export async function getListingUpdates(listingId, limit = 10) {
   const { data, error } = await supabase
     .from('listing_updates')
@@ -45,7 +50,7 @@ export async function getListingUpdates(listingId, limit = 10) {
 export async function postListingUpdate({ listingId, userId, status, photo }) {
   const ext = photo.name.split('.').pop() || 'jpg'
   const path = `updates/${listingId}/${crypto.randomUUID()}.${ext}`
-  const { error: uploadError } = await supabase.storage.from('listing-update-photos').upload(path, photo)
+  const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, photo)
   if (uploadError) throw uploadError
 
   const { data, error } = await supabase
@@ -76,12 +81,6 @@ export function subscribeToListingUpdates(listingId, onInsert) {
   return () => supabase.removeChannel(channel)
 }
 
-function isBundledPhoto(path) {
-  return path.startsWith('/images/')
-}
-
 export function statusPhotoUrl(path) {
-  if (!path) return ''
-  if (isBundledPhoto(path)) return path
-  return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl
+  return photoUrl(path, PHOTO_BUCKET)
 }

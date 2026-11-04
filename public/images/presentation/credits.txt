@@ -51,3 +51,23 @@ Source: https://commons.wikimedia.org/wiki/File:Katong_laksa.jpg
 License: CC0
 http://creativecommons.org/publicdomain/zero/1.0/deed.en
 Downloaded Wikimedia thumbnail; displayed cropped to the card.
+
+Online replacements (direct links)
+----------------------------------
+These replacements are linked online, not downloaded into this project.
+
+Buffet bowls: https://www.pexels.com/photo/a-bowl-with-a-healthy-salad-17597408/
+Tofu bowls (Polina Tankilevitch): https://www.pexels.com/photo/photograph-of-a-poke-bowl-with-tofu-4828142/
+Mixed rice (Piotr Arnoldes): https://www.pexels.com/photo/rice-with-vegetables-in-bowl-beside-chopsticks-7111470/
+Nasi lemak: https://www.pexels.com/photo/close-up-shot-of-food-on-a-plate-5963873/
+Salmon bowls (Gu Ko): https://www.pexels.com/photo/salmon-and-rice-bowl-with-fresh-cilantro-36964109/
+Pexels photo license: https://www.pexels.com/license/
+
+Laksa (Kent Chin): https://unsplash.com/photos/bowl-of-creamy-laksa-with-fried-toppings-and-drink-N4FcjT_jYd4
+Unsplash license: https://unsplash.com/license
+
+Bee hoon: Bihun goreng.JPG by Midori
+Source: https://commons.wikimedia.org/wiki/File:Bihun_goreng.JPG
+License: CC BY-SA 3.0
+https://creativecommons.org/licenses/by-sa/3.0/
+Wikimedia thumbnail, displayed cropped to the card.

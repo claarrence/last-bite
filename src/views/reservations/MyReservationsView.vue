@@ -60,13 +60,11 @@ async function loadReviewedIds(userId) {
 }
 
 // Collected orders still waiting for a review, used for the prompt.
-const toReviewCount = computed(() => {
-  let count = 0
-  for (const r of reservations.value) {
-    if (r.status === 'collected' && !reviewedIds.value.includes(r.id)) count++
-  }
-  return count
-})
+const toReviewCount = computed(
+  () =>
+    reservations.value.filter((r) => r.status === 'collected' && !reviewedIds.value.includes(r.id))
+      .length,
+)
 
 // 'reserved' | 'collected' | 'cancelled' | 'expired' (expired is worked out from the pickup time)
 function statusOf(reservation) {

@@ -140,9 +140,9 @@ const status = computed(() => (listing.value ? displayStatus(listing.value) : ''
 const statusInfo = computed(
   () =>
     ({
-      open: { label: 'Open for collection', cls: 'badge-green' },
-      closed: { label: 'Closed to new bookings', cls: 'badge-grey' },
-      expired: { label: 'Collection window ended', cls: 'badge-ink' },
+      open: { label: 'Available', cls: 'badge-green' },
+      closed: { label: 'Closed', cls: 'badge-grey' },
+      expired: { label: 'Pickup ended', cls: 'badge-ink' },
     })[status.value],
 )
 
@@ -177,7 +177,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
     </div>
 
     <article v-else-if="!loading" class="row g-4" data-testid="listing-detail">
-      <div class="col-md-6">
+      <div class="col-md-5">
         <div class="ratio ratio-4x3 rounded-3 overflow-hidden bg-body-secondary shadow-sm">
           <img
             v-if="listing.photo_path"
@@ -190,7 +190,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
           </div>
         </div>
 
-        <section v-if="coords" class="mt-3" data-testid="detail-map">
+        <section v-if="coords" class="mt-4" data-testid="detail-map">
           <div class="d-flex justify-content-between align-items-baseline mb-2">
             <h2 class="h6 fw-semibold mb-0">Pickup location</h2>
             <a :href="directionsUrl" target="_blank" rel="noopener noreferrer" class="small"
@@ -201,8 +201,8 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
         </section>
       </div>
 
-      <div class="col-md-6">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <div class="col-md-7">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
           <span class="badge rounded-pill" :class="isDiscounted ? 'badge-peach' : 'badge-sand'">
             {{ isDiscounted ? 'Discounted · Reservation required' : 'Free · Walk-in collection' }}
           </span>
@@ -240,7 +240,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
           }}
         </p>
 
-        <p v-if="listing.description" class="text-break" style="white-space: pre-line">
+        <p v-if="listing.description" class="text-break mb-4" style="white-space: pre-line">
           {{ listing.description }}
         </p>
 
@@ -258,26 +258,26 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
           </template>
           <span v-else class="text-secondary">No reviews yet</span>
         </div>
-        <p v-if="isDiscounted" class="small">
+        <p v-if="isDiscounted" class="small mb-4">
           <RouterLink
             :to="{ name: 'establishment', params: { id: listing.owner_id } }"
             data-testid="provider-reviews-link"
-            >See this provider's reviews</RouterLink
+            >Provider reviews</RouterLink
           >
         </p>
 
-        <dl class="row small mb-3">
-          <dt class="col-sm-4">Pickup window</dt>
+        <dl class="row small gy-2 mb-4">
+          <dt class="col-sm-4">Pickup time</dt>
           <dd class="col-sm-8">
             {{ formatPickupWindow(listing.pickup_start, listing.pickup_end) }}
           </dd>
-          <dt class="col-sm-4">Location</dt>
+          <dt class="col-sm-4">Pickup address</dt>
           <dd class="col-sm-8 text-break">{{ listing.address }}</dd>
           <template v-if="listing.collection_instructions">
-            <dt class="col-sm-4">How to collect</dt>
+            <dt class="col-sm-4">Collection instructions</dt>
             <dd class="col-sm-8 text-break">{{ listing.collection_instructions }}</dd>
           </template>
-          <dt class="col-sm-4">Dietary</dt>
+          <dt class="col-sm-4">Dietary info</dt>
           <dd class="col-sm-8">
             <span v-if="!listing.dietary_tags.length" class="text-secondary">None specified</span>
             <span
@@ -287,7 +287,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
               >{{ tag }}</span
             >
           </dd>
-          <dt class="col-sm-4">Contains</dt>
+          <dt class="col-sm-4">Allergens</dt>
           <dd class="col-sm-8">
             <span v-if="!listing.allergens.length" class="text-secondary">None listed</span>
             <span

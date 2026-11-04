@@ -184,3 +184,74 @@ test('a selected pickup location survives posting, viewing and editing', async (
   await expect(page.getByTestId('address')).toHaveValue(saved.address)
   await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1)
 })
+
+async function openOwnedListings(page, rejectDelete = false) {
+  let deleted = false
+  const listing = {
+    id: '22222222-2222-4222-8222-222222222222',
+    owner_id: session.user.id,
+    listing_type: 'discounted',
+    title: 'Surplus chicken rice',
+    photo_path: '/images/buffet.jpg',
+    price: 3.5,
+    quantity_total: 8,
+    quantity_level: null,
+    address: 'Maxwell Food Centre',
+    pickup_start: new Date(Date.now() + 3600_000).toISOString(),
+    pickup_end: new Date(Date.now() + 7200_000).toISOString(),
+    dietary_tags: [],
+    allergens: [],
+    status: 'open',
+  }
+  await page.route('**/rest/v1/listings*', (route) => {
+    const method = route.request().method()
+    if (method === 'PATCH') {
+      Object.assign(listing, route.request().postDataJSON())
+      return route.fulfill({ json: listing })
+    }
+    if (method === 'DELETE') {
+      if (rejectDelete) {
+        return route.fulfill({ status: 409, json: { code: '23503', message: 'Has reservations' } })
+      }
+      deleted = true
+      return route.fulfill({ status: 204, body: '' })
+    }
+    return route.fulfill({ json: deleted ? [] : [listing] })
+  })
+  await openForm(page, true)
+  await page.goto('/my-listings')
+  await expect(page.getByTestId('listing-card')).toHaveCount(1)
+}
+
+test('an owner can close, reopen and delete their listing', async ({ page }) => {
+  await openOwnedListings(page)
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(page.getByTestId('empty-state')).toBeVisible()
+  await page.getByTestId('tab-closed').click()
+  await expect(page.getByTestId('card-status')).toHaveText('Closed')
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Reopen' }).click()
+  await expect(page.getByTestId('empty-state')).toBeVisible()
+  await page.getByTestId('tab-open').click()
+  await expect(page.getByTestId('card-status')).toHaveText('Open')
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Delete' }).click()
+  await page.getByTestId('confirm-dialog').getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByTestId('listing-card')).toHaveCount(1)
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Delete' }).click()
+  await page.getByTestId('confirm-button').click()
+  await expect(page.getByTestId('empty-state')).toBeVisible()
+  await expect(page.getByTestId('listing-card')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByTestId('empty-state')).toBeVisible()
+})
+
+test('a listing with booking history can be closed after deletion is refused', async ({ page }) => {
+  await openOwnedListings(page, true)
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Delete' }).click()
+  await page.getByTestId('confirm-button').click()
+  await expect(page.getByTestId('toast')).toContainText('This listing has reservations')
+  await expect(page.getByTestId('listing-card')).toHaveCount(1)
+  await page.getByTestId('confirm-dialog').getByRole('button', { name: 'Cancel' }).click()
+  await page.getByTestId('listing-card').getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByTestId('tab-closed').click()
+  await expect(page.getByTestId('card-status')).toHaveText('Closed')
+})

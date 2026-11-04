@@ -1,6 +1,13 @@
 <script setup>
 import { onUnmounted, ref } from 'vue'
-import { UPDATE_OPTIONS, optionFor, postListingUpdate, timeAgo, statusPhotoUrl } from '@/utils/statusUpdates'
+import {
+  UPDATE_OPTIONS,
+  optionFor,
+  postListingUpdate,
+  timeAgo,
+  statusPhotoUrl,
+} from '@/utils/statusUpdates'
+import { MAX_PHOTO_BYTES } from '@/utils/listingOptions'
 
 const props = defineProps({
   listing: { type: Object, required: true },
@@ -36,7 +43,7 @@ function onPhotoChange(e) {
     photo.value = null
     return
   }
-  if (file.size > 5 * 1024 * 1024) {
+  if (file.size > MAX_PHOTO_BYTES) {
     formError.value = 'Photo must be under 5 MB.'
     photo.value = null
     return
@@ -46,6 +53,7 @@ function onPhotoChange(e) {
 }
 
 async function submit() {
+  if (submitting.value) return
   formError.value = ''
   if (!status.value) return (formError.value = 'Choose a status.')
   if (!photo.value) return (formError.value = 'A photo is required.')
@@ -72,13 +80,13 @@ async function submit() {
 </script>
 
 <template>
-  <section class="mt-4 border-top pt-3" data-testid="status-updates">
-    <h2 class="h6 fw-semibold mb-3">Live updates</h2>
+  <section class="mt-4 border-top pt-4" data-testid="status-updates">
+    <h2 class="h6 fw-semibold mb-3">Availability updates</h2>
 
     <!-- Post form -->
     <div v-if="!userId" class="small text-secondary mb-3">Log in to post an update.</div>
     <form v-else class="card card-body mb-3" novalidate @submit.prevent="submit">
-      <p class="small text-secondary mb-2">Been to the pickup spot? Let others know what's left.</p>
+      <p class="small text-secondary mb-3">Share an availability update from the pickup spot.</p>
 
       <div class="btn-group flex-wrap mb-3" role="group" aria-label="Availability">
         <template v-for="opt in UPDATE_OPTIONS" :key="opt.value">
@@ -91,12 +99,12 @@ async function submit() {
             :value="opt.value"
             :data-testid="`status-${opt.value}`"
           />
-          <label class="btn" :class="opt.btn" :for="`status-${opt.value}`">{{ opt.label }}</label>
+          <label class="btn btn-sm" :class="opt.btn" :for="`status-${opt.value}`">{{ opt.label }}</label>
         </template>
       </div>
 
       <label for="update-photo" class="form-label small fw-semibold">
-        Photo <span class="text-danger">*</span>
+        Update photo <span class="text-danger">*</span>
       </label>
       <input
         id="update-photo"
@@ -113,14 +121,19 @@ async function submit() {
         :src="preview"
         alt="Preview of your photo"
         class="rounded mb-2"
-        style="max-height: 140px; object-fit: cover"
+        style="max-height: 140px; object-fit: contain"
       />
 
       <div v-if="formError" class="alert alert-danger py-2 small mb-2" role="alert">
         {{ formError }}
       </div>
 
-      <button type="submit" class="btn btn-success" :disabled="submitting" data-testid="post-update">
+      <button
+        type="submit"
+        class="btn btn-success"
+        :disabled="submitting"
+        data-testid="post-update"
+      >
         <span v-if="submitting" class="spinner-border spinner-border-sm me-1" aria-hidden="true" />
         {{ submitting ? 'Posting…' : 'Post update' }}
       </button>
@@ -128,15 +141,15 @@ async function submit() {
 
     <!-- Timeline -->
     <p v-if="!updates.length" class="small text-secondary mb-0">
-      No updates yet. Nobody has confirmed this listing on site.
+      No availability updates yet.
     </p>
     <ul v-else class="list-unstyled border-start ps-3 mb-0" data-testid="update-timeline">
-      <li v-for="u in updates" :key="u.id" class="mb-3 d-flex gap-3 align-items-start">
+      <li v-for="u in updates" :key="u.id" class="mb-4 d-flex flex-wrap gap-3 align-items-center">
         <img
           :src="statusPhotoUrl(u.photo_path)"
           alt="Photo posted with this update"
           class="rounded flex-shrink-0"
-          style="width: 150px; height: 150px; object-fit: cover"
+          style="width: 120px; height: 90px; object-fit: contain"
         />
         <div>
           <span class="badge rounded-pill" :class="optionFor(u.status)?.badge">

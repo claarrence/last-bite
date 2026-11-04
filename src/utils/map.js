@@ -54,7 +54,13 @@ export function createOneMap(el, options = {}) {
     maxBounds: L.latLngBounds(SINGAPORE_BOUNDS),
     ...options,
   })
-  L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
+  addOneMapTiles(map)
+  return map
+}
+
+// Shared basemap; the address picker also listens for tile failures to offer Retry.
+export function addOneMapTiles(map) {
+  return L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
     maxZoom: 19,
     detectRetina: true,
     attribution:
@@ -62,7 +68,6 @@ export function createOneMap(el, options = {}) {
       '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a>&nbsp;&copy;&nbsp;contributors' +
       '&nbsp;&#124;&nbsp;<a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
   }).addTo(map)
-  return map
 }
 
 /** Listing coordinates as numbers, or null if the listing was never pinned. */

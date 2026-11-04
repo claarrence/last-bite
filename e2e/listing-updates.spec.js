@@ -1,20 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { Buffer } from 'node:buffer'
+import { test, expect } from '@playwright/test'
+import { session } from './helpers/session'
 
-const normalUser = {
-  email: process.env.E2E_USER_EMAIL,
-  password: process.env.E2E_USER_PASSWORD,
-}
-
-async function login(page) {
-  await page.goto('/auth')
-  await page.getByRole('textbox', { name: 'Email address' }).click();
-  await page.getByRole('textbox', { name: 'Email address' }).fill(normalUser.email);
-  await page.getByLabel('Password', { exact: true }).fill(normalUser.password)
-  await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/auth'))
-}
-
-// A valid 1x1 PNG, so no fixture file is needed.
+const listingId = '33333333-3333-4333-8333-333333333333'
 const PHOTO = {
   name: 'food.png',
   mimeType: 'image/png',
@@ -23,11 +11,9 @@ const PHOTO = {
     'base64',
   ),
 }
-
-const timeline = (page) => page.locator('[data-testid="update-timeline"] li')
+const timeline = (page) => page.getByTestId('update-timeline').locator('li')
 const verifiedBadge = (page) => page.getByTestId('verified-badge')
 
-// The radio inputs are visually hidden by Bootstrap's .btn-check, so click the label.
 async function chooseStatus(page, status) {
   await page.locator(`label[for="status-${status}"]`).click()
 }
@@ -38,79 +24,110 @@ async function postUpdate(page, status, file = PHOTO) {
   await page.getByTestId('post-update').click()
 }
 
-
-test.describe('status updates (logged in)', () => {
-  test.describe.configure({ mode: 'serial' })
-
-  test.beforeEach(async ({ page }) => {
-    await login(page)
-    await page.goto('/listings/140e6c6c-4d5b-4dbb-bef2-1224c267033f')
-    await expect(page.getByTestId('listing-detail')).toBeVisible()
-    await expect(page.getByTestId('status-updates')).toBeVisible()
+// Every test has its own in-memory responses. No real account, upload or row is changed.
+test.beforeEach(async ({ page }) => {
+  const listing = {
+    id: listingId,
+    owner_id: '44444444-4444-4444-8444-444444444444',
+    listing_type: 'free',
+    title: 'Available buffet food',
+    photo_path: '',
+    quantity_level: 'some',
+    address: 'Singapore',
+    pickup_start: new Date(Date.now() - 3600_000).toISOString(),
+    pickup_end: new Date(Date.now() + 3600_000).toISOString(),
+    dietary_tags: [],
+    allergens: [],
+    status: 'open',
+  }
+  const updates = []
+  await page.route('**/rest/v1/**', (route) => route.fulfill({ json: [] }))
+  await page.route('**/auth/v1/token**', (route) => route.fulfill({ json: session }))
+  await page.route('**/rest/v1/normal_user*', (route) =>
+    route.fulfill({ json: { name: 'Test user' } }),
+  )
+  await page.route('**/rest/v1/listings*', (route) => route.fulfill({ json: listing }))
+  await page.route('**/rest/v1/listing_updates*', (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: updates })
+    const created = {
+      ...route.request().postDataJSON(),
+      id: `update-${updates.length + 1}`,
+      created_at: new Date().toISOString(),
+    }
+    updates.unshift(created)
+    return route.fulfill({ status: 201, json: created })
   })
+  await page.route('**/storage/v1/**', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ json: { Key: 'listing-update-photos/food.png' } })
+      : route.fulfill({ contentType: 'image/png', body: PHOTO.buffer }),
+  )
 
-  test('shows the three status choices and a required photo field', async ({ page }) => {
-    await expect(page.locator('label[for="status-still_available"]')).toHaveText('Still available')
-    await expect(page.locator('label[for="status-running_low"]')).toHaveText('Running low')
-    await expect(page.locator('label[for="status-all_gone"]')).toHaveText('All gone')
-    await expect(page.getByTestId('update-photo')).toBeVisible()
+  await page.goto(`/auth?redirect=/listings/${listingId}`)
+  await page.getByLabel('Email address', { exact: true }).fill(session.user.email)
+  await page.getByLabel('Password', { exact: true }).fill('test-password')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  await expect(page.getByTestId('listing-detail')).toBeVisible()
+  await expect(page.getByTestId('status-updates')).toBeVisible()
+})
+
+test('shows the three status choices and a required photo field', async ({ page }) => {
+  await expect(page.locator('label[for="status-still_available"]')).toHaveText('Still available')
+  await expect(page.locator('label[for="status-running_low"]')).toHaveText('Running low')
+  await expect(page.locator('label[for="status-all_gone"]')).toHaveText('All gone')
+  await expect(page.getByTestId('update-photo')).toBeVisible()
+})
+
+test('asks for a status, then a photo, before posting', async ({ page }) => {
+  await page.getByTestId('post-update').click()
+  await expect(page.getByRole('alert')).toContainText('Choose a status.')
+  await chooseStatus(page, 'still_available')
+  await page.getByTestId('post-update').click()
+  await expect(page.getByRole('alert')).toContainText('A photo is required.')
+  await expect(timeline(page)).toHaveCount(0)
+})
+
+test('rejects a file that is not an image', async ({ page }) => {
+  await page.getByTestId('update-photo').setInputFiles({
+    name: 'notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('not a photo'),
   })
+  await expect(page.getByRole('alert')).toContainText('Please choose an image file.')
+})
 
-  test('asks for a status, then a photo, before posting', async ({ page }) => {
-    const before = await timeline(page).count()
+test('posting Still available adds a timeline entry and the verified badge', async ({ page }) => {
+  await postUpdate(page, 'still_available')
+  await expect(timeline(page)).toHaveCount(1)
+  await expect(timeline(page).first()).toContainText('Still available')
+  await expect(timeline(page).first()).toContainText('Just now')
+  await expect(timeline(page).first().locator('img')).toBeVisible()
+  await expect(verifiedBadge(page)).toBeVisible()
+  await expect(page.getByTestId('post-update')).toHaveText('Post update')
+})
 
-    await page.getByTestId('post-update').click()
-    await expect(page.getByRole('alert')).toContainText('Choose a status.')
+test('Running low and its verified badge survive a reload', async ({ page }) => {
+  await postUpdate(page, 'running_low')
+  await expect(verifiedBadge(page)).toBeVisible()
+  await page.reload()
+  await expect(timeline(page).first()).toContainText('Running low')
+  await expect(verifiedBadge(page)).toBeVisible()
+})
 
-    await chooseStatus(page, 'still_available')
-    await page.getByTestId('post-update').click()
-    await expect(page.getByRole('alert')).toContainText('A photo is required.')
+test('posting All gone shows the banner and removes the badge', async ({ page }) => {
+  await postUpdate(page, 'all_gone')
+  await expect(timeline(page).first()).toContainText('All gone')
+  await expect(page.getByText('reported this is all gone')).toBeVisible()
+  await expect(verifiedBadge(page)).toBeHidden()
+})
 
-    await expect(timeline(page)).toHaveCount(before)
-  })
-
-  test('rejects a file that is not an image', async ({ page }) => {
-    await page.getByTestId('update-photo').setInputFiles({
-      name: 'notes.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('not a photo'),
-    })
-    await expect(page.getByRole('alert')).toContainText('Please choose an image file.')
-  })
-
-  test('posting "Still available" adds a timeline entry and the verified badge', async ({
-    page,
-  }) => {
-    const before = await timeline(page).count()
-
-    await postUpdate(page, 'still_available')
-
-    await expect(timeline(page)).toHaveCount(before + 1)
-    await expect(timeline(page).first()).toContainText('Still available')
-    await expect(timeline(page).first()).toContainText('Just now')
-    await expect(timeline(page).first().locator('img')).toBeVisible()
-    await expect(verifiedBadge(page)).toBeVisible()
-    // The form is ready for another post.
-    await expect(page.getByTestId('post-update')).toHaveText('Post update')
-  })
-
-  test('the verified badge is still there after a reload (it comes from the database)', async ({
-    page,
-  }) => {
-    await postUpdate(page, 'running_low')
-    await expect(verifiedBadge(page)).toBeVisible()
-
-    await page.reload()
-
-    await expect(timeline(page).first()).toContainText('Still available')
-    await expect(verifiedBadge(page)).toBeVisible()
-  })
-
-  test('posting "All gone" shows the banner and removes the badge', async ({ page }) => {
-    await postUpdate(page, 'all_gone')
-
-    await expect(timeline(page).first()).toContainText('All gone')
-    await expect(page.getByText('reported this is all gone')).toBeVisible()
-    await expect(verifiedBadge(page)).toBeHidden()
-  })
+test('a failed update preserves the chosen photo and status for retry', async ({ page }) => {
+  await page.route('**/rest/v1/listing_updates*', (route) =>
+    route.fulfill({ status: 500, json: { message: 'Please try again.' } }),
+  )
+  await postUpdate(page, 'running_low')
+  await expect(page.getByRole('alert')).toContainText('Please try again.')
+  await expect(page.getByTestId('status-running_low')).toBeChecked()
+  await expect(page.getByAltText('Preview of your photo')).toBeVisible()
+  await expect(page.getByTestId('post-update')).toBeEnabled()
 })

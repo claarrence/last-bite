@@ -67,6 +67,8 @@ The map starts at Any distance; the distance dropdown narrows it only when chose
 Cards, the posting preview and listing details show a food emoji without a photo.
 Presentation food photos are bundled in public/images/presentation; source,
 author and licence details are in public/images/presentation/credits.txt.
+Listing photo_path also accepts a direct http(s) image URL. Online images
+are displayed directly and are never removed from Supabase Storage.
 
 
 DATA STORE
@@ -148,7 +150,13 @@ Unit tests (Vitest):
 End-to-end tests (Playwright):
   pnpm exec playwright install      (first time only, downloads browsers)
   pnpm test:e2e
-The E2E tests mock Supabase responses, so no real accounts are created.
+The E2E tests mock Supabase responses, including availability uploads and updates,
+so no real accounts or database rows are created. Each availability test starts
+with its own data and checks the status posted by that test after a reload.
+Headless Chrome-engine checks against a production build:
+  CI=1 pnpm exec playwright test --project=chromium
+Availability checks use fake login responses; E2E_USER_EMAIL and
+E2E_USER_PASSWORD are not needed for the test suite.
 Reservation regression tests:
   pnpm test:unit --run
   pnpm exec playwright test reservations.spec.js --project=chromium
@@ -303,7 +311,11 @@ props and emit events. Named functions use async/await with try/catch/finally.
 A save flows from a button -> Vue function -> src/utils request -> Supabase
 validation -> returned result -> updated state and interface. Shared stateful
 behaviour stays in src/composables; reusable interface pieces stay in components.
-Map bounds and listing coordinates share src/utils/map.js. Home and My Listings
-share the page-enter CSS animation. Unused map factories, reservation lookup,
-loader variants and duplicate CSS have been removed. No packages or database
-rules were changed by this cleanup.
+Map tiles, pin icons, bounds and listing coordinates share src/utils/map.js.
+Listings, availability updates and reviews reuse photoUrl(path, bucket), which
+handles uploads, bundled images and online links. Non-storage photos are skipped
+when removing listing/review uploads. Review counts use a computed filtered list;
+temporary review-photo previews are released when the page is left.
+Home and My Listings share the page-enter CSS animation. Existing composables,
+route guards, reservation functions and database permission rules are preserved.
+No packages or state-management library were added by this cleanup.

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -82,8 +82,13 @@ function fieldError(field) {
   return submitted.value ? errors.value[field] : ''
 }
 
-function onPhotoChange(event) {
+function revokePreview() {
   if (photoPreview.value.startsWith('blob:')) URL.revokeObjectURL(photoPreview.value)
+}
+onBeforeUnmount(revokePreview)
+
+function onPhotoChange(event) {
+  revokePreview()
   const file = event.target.files[0] ?? null
   photoFile.value = file
   photoPreview.value = file ? URL.createObjectURL(file) : ''
@@ -91,7 +96,7 @@ function onPhotoChange(event) {
 }
 
 function removePhoto() {
-  if (photoPreview.value.startsWith('blob:')) URL.revokeObjectURL(photoPreview.value)
+  revokePreview()
   photoFile.value = null
   photoPreview.value = ''
   removeExistingPhoto.value = true
