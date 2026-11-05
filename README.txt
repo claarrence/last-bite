@@ -26,8 +26,9 @@ SETUP AND RUN
 Requires Node.js 22.18+ (or 24.12+) and pnpm.
   pnpm install -> check .env (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)
   -> pnpm dev -> open http://localhost:5173
-The submitted zip includes .env. It is not in GitHub: after cloning, copy
-.env.example to .env and fill in the values.
+The submitted zip includes .env with the Supabase settings and a OneMap login,
+so address search and map pins work locally. It is not in GitHub: after cloning,
+copy .env.example to .env and fill in the values.
 Production build: pnpm build (output in dist/, entry dist/index.html)
 
 
@@ -58,7 +59,8 @@ DATA STORE
 Supabase (PostgreSQL + Supabase Auth). Accounts live in Supabase Auth; profiles
 in the normal_user and establishment tables.
 
-Run in Supabase dashboard -> SQL Editor, in this order:
+For a new Supabase project only (the zip's .env uses our existing one), run in
+Supabase dashboard -> SQL Editor, in this order:
   001_listings -> 002_reservations -> 003_reviews -> 004_pickup_codes
   -> 005_establishment_location -> 006_customer_reservations
 (files in supabase/migrations/; 003 only needs 002.)
