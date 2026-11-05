@@ -12,11 +12,15 @@ const { homeHref, goHome } = useHomeNavigation()
 </script>
 
 <template>
+<<<<<<< Updated upstream
   <main
     v-if="!isSupabaseConfigured"
     class="container py-5"
     data-testid="setup-notice"
   >
+=======
+  <main v-if="!isSupabaseConfigured" class="container py-5" data-testid="setup-notice">
+>>>>>>> Stashed changes
     <BrandLogo />
     <div class="alert alert-warning mt-4" role="alert">
       <h1 class="h5">Supabase is not configured</h1>
