@@ -16,8 +16,8 @@ Landing page URL: TODO (add the deployed URL)
 DEMO ACCOUNTS
 -------------
 TODO (add a user and an establishment login for the graders)
-  User:           email / password
-  Establishment:  email / password
+  User:           drbingo@gmail.com / drbingo
+  Establishment:  establishmentexample@gmail.com / test123
 
 
 SETUP AND RUN
