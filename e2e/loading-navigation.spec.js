@@ -104,7 +104,7 @@ for (const width of [375, 1200]) {
       )
       .toBe(true)
 
-    await page.locator('.hero-actions a').first().click()
+    await page.locator('.hero-actions a', { hasText: 'Browse food' }).click()
     await expect.poll(() => page.evaluate(() => window.scrollY > 0)).toBe(true)
     await page.locator('.navbar-brand').click()
     await expect(page).toHaveURL(/\/$/)

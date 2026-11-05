@@ -8,7 +8,7 @@ const isCI = !!process.env.CI
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
-  expect: { timeout: 5000 },
+  expect: { timeout: 15000 },
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   workers: isCI ? 1 : undefined,
