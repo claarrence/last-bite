@@ -133,7 +133,7 @@ function submitReply() {
 
 <style scoped>
 .review-card {
-  padding: 22px;
+  padding: 24px;
 }
 .review-photo {
   max-width: 220px;

@@ -147,6 +147,18 @@ async function saveReply(review, text) {
         </div>
       </section>
 
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 px-4 mb-3">
+        <h2 class="display-5 page-title mb-0">Reviews</h2>
+        <div v-if="reviews.length" class="d-flex align-items-center gap-2">
+          <label for="review-sort" class="small text-secondary text-nowrap">Sort by</label>
+          <select id="review-sort" v-model="sortBy" class="form-select w-auto pe-5">
+            <option v-for="option in REVIEW_SORTS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+      </div>
+
       <div
         v-if="!reviews.length"
         class="empty-listings text-center text-secondary"
@@ -156,14 +168,6 @@ async function saveReply(review, text) {
       </div>
 
       <template v-else>
-        <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
-          <label for="review-sort" class="small text-secondary text-nowrap">Sort by</label>
-          <select id="review-sort" v-model="sortBy" class="form-select w-auto pe-5">
-            <option v-for="option in REVIEW_SORTS" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
         <div class="d-flex flex-column gap-3">
           <ReviewCard
             v-for="review in sortedReviews"
