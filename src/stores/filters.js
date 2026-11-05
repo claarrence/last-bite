@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { select } from 'three/tsl'
 
 export const useFiltersStore = defineStore('filters', () => {
   // state: one ref per filter
