@@ -9,14 +9,14 @@ Stack:    Vue 3 (Vite), Vue Router, Pinia, Bootstrap 5, Axios, Supabase, OneMap
 
 DEMO ACCOUNTS
 -------------
-  User:           drbingo@gmail.com / drbingo
-  Establishment:  business2@gmail.com / businessing
+  User:           demo.user@lastbite.test / DemoUser123!
+  Establishment:  demo.provider@lastbite.test / DemoProvider123!
 
 The two accounts share demo data, so both sides of the app have something to show:
-  - Chicken rice lunch sets (business2, pickup 5 Dec 2026): the user has an
+  - Chicken rice lunch sets (Demo Provider, pickup 5 Dec 2026): the user has an
     active booking for 2 portions. To confirm it, enter the pickup number from
     the user's My Reservations on the establishment's listing page.
-  - Tofu and greens salad bowls (business2, pickup 5 Dec 2026): already
+  - Tofu and greens salad bowls (Demo Provider, pickup 5 Dec 2026): already
     collected, with the user's 5-star review and the establishment's reply.
 
 
