@@ -6,6 +6,7 @@ defineProps({
   label: String,
 })
 
+
 const emit = defineEmits(['remove'])
 </script>
 

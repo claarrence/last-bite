@@ -37,6 +37,7 @@ const filters = useFiltersStore()
       />
     </div>
   </div>
+
   <div
     v-if="filters.activeTagsComputed.length"
     class="d-flex flex-wrap align-items-center gap-2 mb-3"

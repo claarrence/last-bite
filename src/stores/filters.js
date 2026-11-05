@@ -14,12 +14,14 @@ export const useFiltersStore = defineStore('filters', () => {
   const selectedDietary = ref([])
   const availableNow = ref(false)
 
+
   function matchesFunction(listing, now) {
     // Food type: say no if the user picked a type and this listing is a different type
     if (foodType.value !== 'all' && listing.listing_type !== foodType.value) {
       return false
     }
 
+    // Search check
     const trimLowerQuery = query.value.trim().toLowerCase()
     const listingDetails = ` ${listing.title} ${listing.address} ${listing.description || ''}`
       .toLowerCase()
@@ -28,12 +30,15 @@ export const useFiltersStore = defineStore('filters', () => {
       return false
     }
 
+    // Dietary check
     const listingTags = listing.dietary_tags || []
     for (const tag of selectedDietary.value) {
       if (!listingTags.includes(tag)) {
         return false
       }
     }
+
+    // "Available now" check
 
     if (availableNow.value == true && new Date(listing.pickup_start) > now) {
       return false
@@ -69,6 +74,7 @@ export const useFiltersStore = defineStore('filters', () => {
       }
     }
 
+    // "Available now" tag
     if (availableNow.value == true) {
       tags.push({ filter: 'availableNow', label: 'Available now' })
     }
@@ -77,6 +83,7 @@ export const useFiltersStore = defineStore('filters', () => {
   })
 
   function removeTagFunction(tag) {
+    // Turn off the one filter this tag stands for
     if (tag.filter == 'foodType') foodType.value = 'all'
     if (tag.filter == 'query') query.value = ''
     if (tag.filter == 'availableNow') availableNow.value = false
