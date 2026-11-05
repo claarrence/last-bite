@@ -262,7 +262,7 @@ onUnmounted(() => clearInterval(timer))
         </router-link>
       </div>
 
-      <!-- TODO (Ryan): show the filter checkboxes and chips here -->
+      <!-- Filter checkboxes and chips -->
       <FilterBar />
 
       <div

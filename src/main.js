@@ -1,3 +1,6 @@
+// Third-party libraries beyond the course material:
+// Supabase JS (database, auth, storage), Leaflet (maps), Three.js (homepage 3D scene).
+// README.txt lists all the app's libraries; package.json also has the dev tools.
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 

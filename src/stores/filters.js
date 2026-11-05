@@ -14,7 +14,6 @@ export const useFiltersStore = defineStore('filters', () => {
   const selectedDietary = ref([])
   const availableNow = ref(false)
 
-  // TODO (Ryan, step 10, optional): save the filters to localStorage and load them back
 
   function matchesFunction(listing, now) {
     // Food type: say no if the user picked a type and this listing is a different type
@@ -22,7 +21,7 @@ export const useFiltersStore = defineStore('filters', () => {
       return false
     }
 
-    // TODO (Ryan): search check
+    // Search check
     const trimLowerQuery = query.value.trim().toLowerCase()
     const listingDetails = ` ${listing.title} ${listing.address} ${listing.description || ''}`
       .toLowerCase()
@@ -31,7 +30,7 @@ export const useFiltersStore = defineStore('filters', () => {
       return false
     }
 
-    // TODO (Ryan): dietary check
+    // Dietary check
     const listingTags = listing.dietary_tags || []
     for (const tag of selectedDietary.value) {
       if (!listingTags.includes(tag)) {
@@ -39,7 +38,7 @@ export const useFiltersStore = defineStore('filters', () => {
       }
     }
 
-    // TODO (Ryan): "Available now" check
+    // "Available now" check
 
     if (availableNow.value == true && new Date(listing.pickup_start) > now) {
       return false
@@ -75,7 +74,7 @@ export const useFiltersStore = defineStore('filters', () => {
       }
     }
 
-    // TODO (Ryan): "Available now" tag
+    // "Available now" tag
     if (availableNow.value == true) {
       tags.push({ filter: 'availableNow', label: 'Available now' })
     }
@@ -84,7 +83,7 @@ export const useFiltersStore = defineStore('filters', () => {
   })
 
   function removeTagFunction(tag) {
-    // TODO (Ryan): turn off the one filter this tag stands for
+    // Turn off the one filter this tag stands for
     if (tag.filter == 'foodType') foodType.value = 'all'
     if (tag.filter == 'query') query.value = ''
     if (tag.filter == 'availableNow') availableNow.value = false

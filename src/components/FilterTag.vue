@@ -2,18 +2,15 @@
 // A removable chip for one active filter, e.g. "Halal ✕".
 // The parent passes in the text to show and decides what removing it means.
 
-// TODO (Ryan): declare a 'label' prop (Wk6 defineProps)
 defineProps({
   label: String,
 })
 
-// TODO (Ryan): declare a 'remove' event (Wk6 defineEmits)
 
 const emit = defineEmits(['remove'])
 </script>
 
 <template>
-  <!-- TODO (Ryan): emit 'remove' when this button is clicked -->
   <button
     type="button"
     @click="emit('remove')"
