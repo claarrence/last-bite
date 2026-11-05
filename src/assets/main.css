@@ -475,6 +475,11 @@ footer {
   }
 }
 @media (max-width: 575px) {
+  /* Wider page margins on phones (Bootstrap's own are 12px). */
+  .container {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
   .app-navbar .navbar-nav {
     gap: 8px;
     padding-top: 16px;

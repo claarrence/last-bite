@@ -264,7 +264,12 @@ function fieldError(field) {
 }
 
 // Required fields in the order they appear, for the ✓ marks and the "fill this next" pulse.
+// Businesses can post either listing type, so they confirm one first. It starts pre-selected,
+// so it only counts as done once they click an option.
+const typeChosen = ref(false)
+
 const requiredFields = computed(() => [
+  ...(establishment.value && !isEdit.value ? ['listingType'] : []),
   'title',
   'photo',
   ...(form.listingType === 'discounted' ? ['price', 'quantityTotal'] : ['quantityLevel']),
@@ -275,6 +280,7 @@ const requiredFields = computed(() => [
 ])
 
 function isDone(field) {
+  if (field === 'listingType') return typeChosen.value
   return !errors.value[field]
 }
 
@@ -382,9 +388,19 @@ async function submit() {
           @submit.prevent="submit"
         >
           <!-- Listing type -->
-          <fieldset class="mb-4 form-step">
-            <legend class="form-label fw-semibold fs-6">Listing type</legend>
-            <div class="btn-group w-100" role="group" aria-label="Listing type">
+          <fieldset class="mb-4" :class="step('listingType')">
+            <legend class="form-label fw-semibold fs-6">
+              Listing type
+              <span v-if="establishment && !isEdit && isDone('listingType')" class="field-done"
+                >✓<span class="visually-hidden"> chosen</span></span
+              >
+            </legend>
+            <div
+              class="btn-group w-100 type-options"
+              :class="{ 'needs-attention': nextField === 'listingType' }"
+              role="group"
+              aria-label="Listing type"
+            >
               <input
                 id="type-free"
                 v-model="form.listingType"
@@ -394,6 +410,7 @@ async function submit() {
                 value="free"
                 :disabled="isEdit"
                 data-testid="type-free"
+                @click="typeChosen = true"
               />
               <label class="btn btn-outline-success flex-fill" for="type-free">
                 <span class="d-block fw-semibold">Buffet / Event food</span>
@@ -410,6 +427,7 @@ async function submit() {
                   value="discounted"
                   :disabled="isEdit"
                   data-testid="type-discounted"
+                  @click="typeChosen = true"
                 />
                 <label class="btn btn-outline-success flex-fill" for="type-discounted">
                   <span class="d-block fw-semibold">Reservation food</span>
@@ -988,6 +1006,31 @@ async function submit() {
   color: var(--color-muted);
   font-size: 12px;
   font-weight: 600;
+}
+/* Phones: the two listing types stack instead of squeezing their text onto two lines,
+   and the optional box gives back some of its inner padding. */
+@media (max-width: 575px) {
+  .type-options {
+    flex-direction: column;
+  }
+  .type-options > .btn {
+    margin-left: 0 !important;
+    border-radius: var(--bs-border-radius) !important;
+  }
+  .type-options > .btn + .btn {
+    margin-top: -1px !important;
+  }
+  .type-options > .btn:first-of-type {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  .type-options > .btn:last-of-type:not(:first-of-type) {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+  .optional-details {
+    padding: 16px;
+  }
 }
 @media (min-width: 992px) {
   .preview {
