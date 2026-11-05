@@ -215,3 +215,6 @@ Post food form and site font:
     asked; the live preview shown on desktop only.
   - The matching updates to e2e/posting.spec.js and
     e2e/establishment-location.spec.js.
+
+Project support: Claude helped with writing vercel.json, TODO comment removal, the .env cleanup and parts of this README.
+It also created the demo accounts and data. Lastly, it also helped with coming up with the 3d Render on the landing page.
