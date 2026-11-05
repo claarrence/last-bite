@@ -28,7 +28,6 @@ const filters = useFiltersStore()
     <span class="small text-secondary me-1">Dietary: </span>
     <div v-for="tag in DIETARY_TAGS" :key="tag" class="form-check form-check-inline mb-0">
       <label class="form-check-label small" :for="`filter-${tag}`">{{ tag }}</label>
-      <!-- TODO (Ryan): bind this checkbox to the store with :value and v-model -->
       <input
         :id="`filter-${tag}`"
         :value="tag"
@@ -38,12 +37,6 @@ const filters = useFiltersStore()
       />
     </div>
   </div>
-  <!--
-    TODO (Ryan): the active filter chips.
-    Only show this row when at least one filter is on. Inside it, show one <FilterTag> per
-    tag in the store's activeTagsComputed, and remove that filter when the chip emits 'remove'.
-  -->
-
   <div
     v-if="filters.activeTagsComputed.length"
     class="d-flex flex-wrap align-items-center gap-2 mb-3"
