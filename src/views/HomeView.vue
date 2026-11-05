@@ -5,20 +5,21 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import HomeFoodScene from '@/components/HomeFoodScene.vue'
 import PostFoodButton from '@/components/PostFoodButton.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
-import FilterBar from '@/components/FilterBar.vue'
+import { useFiltersStore } from '@/stores/filters'
 import { displayStatus, getAvailableListings, photoUrl } from '@/utils/listings'
 import { withRemainingPortions } from '@/utils/reservations'
 import { distanceKm, getBrowserPosition, listingCoords } from '@/utils/map'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { vReveal } from '@/utils/reveal'
-import { useFiltersStore } from '@/stores/filters'
+import FilterBar from '@/components/FilterBar.vue'
 
 const logo = ref(null)
 const navbar = ref(null)
 const foodScene = ref(null)
 const { homeHref, goHome, homeEntrance } = useHomeNavigation()
 const { active, navOpacity, logoStyle, foodStyle } = useLandingMotion(logo, navbar)
+const filters = useFiltersStore()
 
 // Replay the entrance without rebuilding the WebGL scene.
 watch(homeEntrance, () => {
@@ -27,9 +28,6 @@ watch(homeEntrance, () => {
     animation.play()
   }
 })
-
-// Shared with the map page, so filters chosen here still apply there.
-const filters = useFiltersStore()
 
 const listings = ref([])
 const loading = ref(true)
@@ -51,9 +49,9 @@ const availableListings = computed(() =>
   listings.value.filter((listing) => displayStatus(listing, now.value) === 'open'),
 )
 const visibleListings = computed(() => {
-  const results = availableListings.value.filter((listing) =>
-    filters.matchesFunction(listing, now.value),
-  )
+  const results = availableListings.value.filter((listing) => {
+    return filters.matchesFunction(listing, now.value)
+  })
   if (filters.sortBy === 'ending') {
     results.sort((a, b) => new Date(a.pickup_end) - new Date(b.pickup_end))
   } else if (filters.sortBy === 'nearest' && userLocation.value) {
@@ -127,8 +125,6 @@ async function locateUser() {
 
 // The warning is not cleared here: a failed lookup switches back to "newest",
 // which would otherwise hide the message straight away.
-// `immediate` because the store keeps "Nearest to me" when the user comes back to this page,
-// but the location found last time was lost when the page closed.
 watch(
   () => filters.sortBy,
   (value) => {
@@ -136,6 +132,10 @@ watch(
   },
   { immediate: true },
 )
+
+function clearFilters() {
+  filters.clearAllFunction()
+}
 
 async function loadListings() {
   loading.value = true
@@ -215,7 +215,9 @@ onUnmounted(() => clearInterval(timer))
         <div class="sort-control d-flex align-items-center gap-2">
           <label for="food-sort" title="Sort by">
             <span class="visually-hidden">Sort by</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16l-6 7.5V19l-4-2v-4.5Z" />
+            </svg>
           </label>
           <span
             v-if="locating"
@@ -259,7 +261,10 @@ onUnmounted(() => clearInterval(timer))
           <span aria-hidden="true">📍</span> View on map
         </router-link>
       </div>
+
+      <!-- TODO (Ryan): show the filter checkboxes and chips here -->
       <FilterBar />
+
       <div
         v-if="locationError"
         class="alert alert-warning d-flex justify-content-between align-items-start gap-2 py-2 small"
@@ -307,7 +312,7 @@ onUnmounted(() => clearInterval(timer))
           v-if="availableListings.length"
           type="button"
           class="btn btn-outline-success btn-sm"
-          @click="filters.clearAllFunction()"
+          @click="clearFilters"
         >
           Clear filters
         </button>

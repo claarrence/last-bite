@@ -46,6 +46,7 @@ test('new establishment listings start at the location saved at registration', a
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   await expect(page.getByTestId('listing-form')).toBeVisible()
   await expect(page.getByTestId('address')).toHaveValue(place.ADDRESS)
+  await page.getByTestId('pick-on-map').click()
   await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1)
 })
 

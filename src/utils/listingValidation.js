@@ -32,7 +32,10 @@ export function validateListing(form, { isEstablishment = false, now = new Date(
     errors.description = 'Keep the description under 500 characters.'
   }
 
-  if (form.photoFile) {
+  // Every listing needs a photo; an edited listing can keep the one it already has.
+  if (!form.photoFile) {
+    if (!form.existingPhotoPath) errors.photo = 'Add a photo of the food.'
+  } else {
     if (!form.photoFile.type?.startsWith('image/'))
       errors.photo = 'The photo must be an image file.'
     else if (form.photoFile.size > MAX_PHOTO_BYTES)

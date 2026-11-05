@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { test, expect } from '@playwright/test'
 import { session } from './helpers/session'
 
@@ -20,6 +21,23 @@ async function openForm(page, establishment = false) {
   await expect(page.getByTestId('listing-form')).toBeVisible()
 }
 
+// The photo is required: attach a 1x1 PNG and pretend Supabase Storage saved it.
+const PHOTO = {
+  name: 'food.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  ),
+}
+
+async function attachPhoto(page) {
+  await page.route('**/storage/v1/object/**', (route) =>
+    route.fulfill({ json: { Key: 'listing-photos/food.png' } }),
+  )
+  await page.getByTestId('photo').setInputFiles(PHOTO)
+}
+
 async function fillPickup(page) {
   await page.getByTestId('address').fill('SMU, Level 2, outside seminar room')
   await page.getByTestId('date').fill(new Date(Date.now() + 86400_000).toISOString().slice(0, 10))
@@ -38,16 +56,13 @@ for (const width of [375, 768, 1200]) {
     await page.getByTestId('title').fill('Surplus lunch boxes')
     await page.getByTestId('price').fill('3.50')
     await page.getByTestId('quantity').fill('8')
-    const preview = page.getByTestId('preview')
-    await expect(preview.getByTestId('card-title')).toHaveText('Surplus lunch boxes')
-    await expect(preview.getByTestId('card-price')).toHaveText('S$3.50')
-    await expect(preview.getByTestId('card-quantity')).toHaveText('8 portions')
+    // The live preview sits beside the form on desktop (Bootstrap lg, 992px) only.
+    await expect(page.getByTestId('preview')).toBeVisible({ visible: width >= 992 })
 
     await page.locator('label[for="type-free"]').click()
     await expect(page.getByTestId('free-fields')).toBeVisible()
     await expect(page.getByTestId('discounted-fields')).toHaveCount(0)
     await page.locator('label[for="qty-some"]').click()
-    await expect(preview.getByTestId('card-price')).toHaveText('Free')
 
     await page.locator('label[for="type-discounted"]').click()
     await expect(page.getByTestId('price')).toHaveValue(/^3\.50?$/)
@@ -61,6 +76,21 @@ for (const width of [375, 768, 1200]) {
     })
   })
 }
+
+test('the live preview updates as the form is filled in on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 })
+  await openForm(page, true)
+  await page.getByTestId('title').fill('Surplus lunch boxes')
+  await page.getByTestId('price').fill('3.50')
+  await page.getByTestId('quantity').fill('8')
+  const preview = page.getByTestId('preview')
+  await expect(preview.getByTestId('card-title')).toHaveText('Surplus lunch boxes')
+  await expect(preview.getByTestId('card-price')).toHaveText('S$3.50')
+  await expect(preview.getByTestId('card-quantity')).toHaveText('8 portions')
+  await page.locator('label[for="type-free"]').click()
+  await page.locator('label[for="qty-some"]').click()
+  await expect(preview.getByTestId('card-price')).toHaveText('Free')
+})
 
 test('a normal user only sees buffet food and can post it', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 900 })
@@ -80,6 +110,7 @@ test('a normal user only sees buffet food and can post it', async ({ page }, tes
     animations: 'disabled',
   })
   await page.getByTestId('title').fill('Buffet leftovers')
+  await attachPhoto(page)
   await page.locator('label[for="qty-some"]').click()
   await fillPickup(page)
   await page.getByTestId('submit').click()
@@ -92,7 +123,7 @@ test('a normal user only sees buffet food and can post it', async ({ page }, tes
     price: null,
     quantity_total: null,
     quantity_level: 'some',
-    photo_path: '',
+    photo_path: expect.stringMatching(/\.png$/),
   })
 })
 
@@ -110,7 +141,9 @@ test('failed reservation-food posting preserves entered details and allows retry
   await openForm(page, true)
   await page.getByTestId('submit').click()
   await expect(page.getByTestId('form-errors')).toBeVisible()
+  await expect(page.getByText('Add a photo of the food.')).toBeVisible()
   await page.getByTestId('title').fill('Chicken rice boxes')
+  await attachPhoto(page)
   await page.getByTestId('price').fill('3.50')
   await page.getByTestId('quantity').fill('8')
   await fillPickup(page)
@@ -162,12 +195,16 @@ test('a selected pickup location survives posting, viewing and editing', async (
   )
   await openForm(page)
   await page.getByTestId('title').fill('Lunch at Revenue House')
+  await attachPhoto(page)
   await page.locator('label[for="qty-some"]').click()
   await fillPickup(page)
   await page.getByTestId('address').fill('307987')
   await expect(page.getByRole('option')).toBeVisible()
   await page.getByTestId('address').press('ArrowDown')
   await page.getByTestId('address').press('Enter')
+  // The map stays hidden until asked for, then shows the chosen spot.
+  await expect(page.locator('.leaflet-marker-icon')).toHaveCount(0)
+  await page.getByTestId('pick-on-map').click()
   await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1)
 
   await page.getByTestId('submit').click()
@@ -181,5 +218,6 @@ test('a selected pickup location survives posting, viewing and editing', async (
   )
   await page.getByTestId('edit-button').click()
   await expect(page.getByTestId('address')).toHaveValue(saved.address)
+  await page.getByTestId('pick-on-map').click()
   await expect(page.locator('.leaflet-marker-icon')).toHaveCount(1)
 })

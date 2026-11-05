@@ -5,6 +5,9 @@ import { useRoute, useRouter } from 'vue-router'
 import BrandLogo from '@/components/BrandLogo.vue'
 import FoodVisual from '@/components/FoodVisual.vue'
 import AddressPicker from '@/components/AddressPicker.vue'
+import LocationMap from '@/components/LocationMap.vue'
+import { getBrowserPosition, isInSingapore } from '@/utils/map'
+import { reverseGeocode } from '@/utils/onemap'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,6 +56,64 @@ function onAddressClear() {
   addressError.value = ''
 }
 
+// Same two options as the post food form: "Use my location", or "Pick on map" (hidden until
+// asked). Either way the pin's address is looked up with OneMap.
+const showMap = ref(false)
+const searchResults = ref([])
+const locating = ref(false)
+const geocoding = ref(false)
+const locateError = ref('')
+
+async function onMapPick(pick) {
+  lat.value = pick.lat
+  lng.value = pick.lng
+  addressError.value = ''
+  locateError.value = ''
+  if (pick.address) {
+    address.value = pick.address
+    return
+  }
+  geocoding.value = true
+  try {
+    address.value = await reverseGeocode(pick.lat, pick.lng)
+    if (!address.value) locateError.value = 'No address found at this pin. Search a nearby address.'
+  } catch (err) {
+    locateError.value = err.message
+  } finally {
+    geocoding.value = false
+  }
+}
+
+async function useMyLocation() {
+  locateError.value = ''
+  if (!('geolocation' in navigator)) {
+    locateError.value = 'Your browser cannot share its location. Search for the address instead.'
+    return
+  }
+  // Browsers only share location on HTTPS or localhost.
+  if (!window.isSecureContext) {
+    locateError.value = 'Location needs a secure (https://) connection. Search for the address instead.'
+    return
+  }
+  locating.value = true
+  try {
+    const position = await getBrowserPosition({ enableHighAccuracy: true, timeout: 10000 })
+    const here = { lat: position.coords.latitude, lng: position.coords.longitude }
+    if (!isInSingapore(here.lat, here.lng)) {
+      locateError.value = 'Your location appears to be outside Singapore. Search for the address instead.'
+      return
+    }
+    await onMapPick(here)
+  } catch (err) {
+    // err.code 1 means the user (or browser settings) blocked location access.
+    locateError.value = err.code === 1
+      ? 'Location access is blocked. Allow location for this site in your browser, or search for the address.'
+      : 'Could not find your location. Try again or search for the address.'
+  } finally {
+    locating.value = false
+  }
+}
+
 function resetForm() {
   showPassword.value = false
   name.value = ''
@@ -62,6 +123,9 @@ function resetForm() {
   businessType.value = ''
   address.value = ''
   onAddressClear()
+  showMap.value = false
+  searchResults.value = []
+  locateError.value = ''
   registeredMessage.value = ''
 }
 
@@ -246,14 +310,34 @@ async function login() {
               <label for="auth-address" class="form-label">Pickup location</label>
               <AddressPicker id="auth-address" v-model="address" :invalid="!!addressError"
                 :pinned="lat != null && lng != null" placeholder="Search an address or postal code"
-                @select="onAddressSelect" @clear="onAddressClear">
+                @select="onAddressSelect" @clear="onAddressClear" @results="searchResults = $event">
                 <!-- Added only when needed: WebKit does not re-lay-out a feedback element that
                      is revealed by the input's .is-invalid class, so Safari would keep it hidden. -->
                 <template #feedback>
                   <div v-if="addressError" class="invalid-feedback d-block">{{ addressError }}</div>
                 </template>
               </AddressPicker>
-              <div class="form-text">Used as the default location when you post food.</div>
+              <div class="form-text">
+                <template v-if="geocoding">Looking up address…</template>
+                <template v-else>Used as the default location when you post food. Type an address, or use one of these:</template>
+              </div>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button type="button" class="btn btn-outline-success btn-sm" :disabled="locating || geocoding"
+                  data-testid="auth-use-my-location" @click="useMyLocation">
+                  <span v-if="locating" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                  <span v-else aria-hidden="true">📍</span>
+                  {{ locating ? 'Finding your location…' : 'Use my location' }}
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm" :aria-expanded="showMap"
+                  data-testid="auth-pick-on-map" @click="showMap = !showMap">
+                  <span aria-hidden="true">🗺️</span> {{ showMap ? 'Hide map' : 'Pick on map' }}
+                </button>
+              </div>
+              <div v-if="locateError" class="text-danger small mt-2" role="alert">{{ locateError }}</div>
+              <template v-if="showMap">
+                <LocationMap class="mt-2" :results="searchResults" :lat="lat" :lng="lng" @pick="onMapPick" />
+                <div class="form-text">Click the map to drop your pickup pin.</div>
+              </template>
             </div>
             <div class="auth-field">
               <label for="auth-password" class="form-label">Password</label>
