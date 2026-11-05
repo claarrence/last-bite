@@ -4,6 +4,7 @@ Connects people in Singapore with surplus food: free leftovers from events and
 buffets, and discounted end-of-day food from outlets.
 
 Live app: https://last-bite-gamma.vercel.app
+Git Repo URL: https://github.com/claarrence/last-bite
 Stack:    Vue 3 (Vite), Vue Router, Pinia, Bootstrap 5, Axios, Supabase, OneMap
 
 
