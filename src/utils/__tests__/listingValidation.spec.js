@@ -53,12 +53,18 @@ describe('validateListing', () => {
   })
 
   describe('photo', () => {
-    it('is optional for a new free listing', () => {
-      expect(validate(freeForm({ photoFile: null }))).toEqual({})
+    it('is required for a new free listing', () => {
+      expect(validate(freeForm({ photoFile: null }))).toHaveProperty('photo')
     })
 
-    it('is optional for a discounted listing', () => {
-      expect(validate(discountedForm({ photoFile: null }), true)).toEqual({})
+    it('is required for a new discounted listing', () => {
+      expect(validate(discountedForm({ photoFile: null }), true)).toHaveProperty('photo')
+    })
+
+    it('can be left empty when editing a listing that already has one', () => {
+      expect(validate(freeForm({ photoFile: null, existingPhotoPath: 'user/photo.jpg' }))).toEqual(
+        {},
+      )
     })
 
     it('must be an image', () => {
