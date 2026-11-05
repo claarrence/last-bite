@@ -186,6 +186,7 @@ THIRD-PARTY LIBRARIES
 Vue, Vue Router, Pinia (shared state), Bootstrap, Axios, Supabase JS, Leaflet
 (maps) and Three.js (homepage rendering). All are free,
 open-source libraries installed through pnpm (see package.json).
+The Inter typeface is loaded from Google Fonts (free, SIL Open Font License).
 
 
 TEAM NOTES (TEMPORARY)
@@ -273,29 +274,6 @@ existing ListingCard components. Supabase remains the source of listings and
 reservation stock. Browser checks use mocked data; they do not add real food or
 reservations.
 
-
-SEARCH AND FILTERS
-------------------
-Owner: Ryan Lee.
-
-The homepage (Browse food) and the /map page share one Pinia store,
-src/stores/filters.js, so a filter chosen on one page still applies on the other:
-  - Search (title, pickup address, description), food type (All / Free buffet /
-    Reservation food), dietary tags (Halal, Vegetarian, Vegan, No pork/no lard)
-    and "Available now" (pickup window has already started).
-  - A listing must have every ticked dietary tag, so Halal + Vegetarian shows
-    only food that is both.
-  - Each active filter appears as a removable tag (FilterTag.vue); "Clear all"
-    resets them. FilterBar.vue holds the checkboxes and tags on both pages.
-  - Filters are saved in localStorage (key lastbite-filters) and survive a page
-    refresh. The sort order is not saved, so "Nearest to me" never asks for the
-    user's location as soon as the page opens.
-  - The map list has its own sort: nearest first, or pickup ending soon.
-
-Store: state (query, foodType, selectedDietary, availableNow, sortBy), a getter
-(activeTagsComputed) and actions (matchesFunction, removeTagFunction,
-clearAllFunction), following the Week 11 Pinia slides.
-
 The homepage's 3D food scene is isolated in src/components/HomeFoodScene.vue.
 Three.js loads on Home only, then WebGL renders glossy porcelain plates
 holding the real dish photos, plus floating tofu cubes, tomatoes and lettuce
@@ -331,6 +309,26 @@ chunk loads after Home mounts. Official API: https://threejs.org/docs/
 Browser checks: pnpm exec playwright test home-animation.spec.js --project=chromium
 
 
+SEARCH AND FILTERS
+------------------
+Owner: Ryan Lee.
+
+The homepage (Browse food) and the /map page share one Pinia store,
+src/stores/filters.js, so a filter chosen on one page still applies on the other:
+  - Search (title, pickup address, description), food type (All / Free buffet /
+    Reservation food), dietary tags (Halal, Vegetarian, Vegan, No pork/no lard)
+    and "Available now" (pickup window has already started).
+  - A listing must have every ticked dietary tag, so Halal + Vegetarian shows
+    only food that is both.
+  - Each active filter appears as a removable tag (FilterTag.vue). FilterBar.vue
+    holds the checkboxes and tags on both pages.
+  - The map list has its own sort: nearest first, or pickup ending soon.
+
+Store: state (query, foodType, selectedDietary, availableNow, sortBy), a getter
+(activeTagsComputed) and actions (matchesFunction, removeTagFunction,
+clearAllFunction), following the Week 11 Pinia slides.
+
+
 CODE WALKTHROUGH
 ----------------
 Use the Week 2–6 CSS, Bootstrap and Vue examples, plus Week 10 testing and
@@ -353,15 +351,30 @@ Search and filters (Ryan Lee): Claude (Anthropic's AI assistant, used through
 Claude Code) explained the Vue and Pinia concepts, reviewed code and wrote
 parts of this feature.
   Written by Ryan, with AI explanations and hints:
-    - The filters store's state (query, foodType, selectedDietary,
-      availableNow, sortBy).
-    - The food-type check in matchesFunction, clearAllFunction, and the
-      food-type, search and dietary tags in activeTagsComputed.
-    - The "Available now" checkbox binding.
-    - The search, dietary and "Available now" checks in matchesFunction; the
-      "Available now" tag; removeTagFunction.
-    - FilterTag.vue and FilterBar.vue (including the dietary checkbox binding).
-    - Connecting HomeView.vue and NearbyMapView.vue to the store, the map's
-      sort menu and "Clear filters" empty state, and the distance menu width fix.
-    - Saving filters to localStorage.
+    - The filters store (src/stores/filters.js): its state, matchesFunction,
+      activeTagsComputed, removeTagFunction and clearAllFunction.
+    - FilterTag.vue's label prop and remove event; FilterBar.vue's checkbox
+      bindings and chips row.
+    - Connecting the homepage (HomeView.vue) to the store and adding FilterBar.
+  Written by AI:
+    - Installing Pinia and registering it in main.js.
+    - The HTML, Bootstrap classes and CSS of FilterBar.vue and FilterTag.vue.
+    - Connecting the map page (NearbyMapView.vue) to the store and adding
+      FilterBar, repeating the homepage wiring Ryan wrote, and the map list's
+      "Pickup ending soon" sort (Ryan added its menu and mapSort ref).
+    - The map's control row layout fixes (CSS: distance menu width, wrapping
+      on phones).
     - src/stores/__tests__/filters.spec.js and e2e/filters.spec.js.
+    - Food photos in the map list and pin popups, and the popup styling.
+
+Post food form and site font (requested by Ryan; written by AI):
+  - Inter font for body text (index.html, main.css).
+  - ListingFormView.vue: optional fields grouped in a "More details" box;
+    the photo made required (listingValidation.js and its tests); Choose
+    file / Take photo buttons with a "Photo added" thumbnail; the webcam
+    panel (WebcamCapture.vue, using the browser's getUserMedia camera API);
+    ticks on filled required fields, a pulse on the next one and fading of
+    the rest; "Use my location" / "Pick on map" with the map hidden until
+    asked; the live preview shown on desktop only.
+  - The matching updates to e2e/posting.spec.js and
+    e2e/establishment-location.spec.js.

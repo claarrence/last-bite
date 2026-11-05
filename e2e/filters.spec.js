@@ -86,7 +86,9 @@ test('dietary and "Available now" filters narrow the list and show removable tag
   await expect(cards(page).first()).toContainText('Nasi lemak packs')
   await expect(chips(page)).toHaveText([/Free buffet/, /Halal/, /Available now/])
 
-  await page.getByRole('button', { name: 'Clear all', exact: true }).click()
+  for (const label of ['Free buffet', 'Halal', 'Available now']) {
+    await page.getByRole('button', { name: `Remove filter: ${label}` }).click()
+  }
   await expect(page.getByTestId('active-filters')).toHaveCount(0)
   await expect(cards(page)).toHaveCount(3)
   await expect(page.getByRole('button', { name: 'All food', exact: true })).toHaveAttribute(
@@ -126,25 +128,13 @@ test('the map list can be sorted by pickup deadline', async ({ page }) => {
   await expect(items.first()).toContainText('Veg curry sets')
 })
 
-test('the map says when filters hide everything and can clear them', async ({ page }) => {
+test('the map shows an empty list when filters hide everything', async ({ page }) => {
   await page.goto('/map')
   await dietary(page, 'Vegan').check()
   await expect(page.getByTestId('map-list-item')).toHaveCount(0)
-  await expect(page.getByText('No matching food on the map right now.')).toBeVisible()
-  await page.getByRole('button', { name: 'Clear filters', exact: true }).click()
+  await expect(page.getByText('No food on the map right now.')).toBeVisible()
+  await page.getByRole('button', { name: 'Remove filter: Vegan' }).click()
   await expect(page.getByTestId('map-list-item')).toHaveCount(3)
-})
-
-test('filters are remembered after a page refresh', async ({ page }) => {
-  await page.goto('/#browse')
-  await dietary(page, 'Halal').check()
-  await page.getByRole('checkbox', { name: 'Available now' }).check()
-  await expect(cards(page)).toHaveCount(2)
-
-  await page.reload()
-  await expect(dietary(page, 'Halal')).toBeChecked()
-  await expect(page.getByRole('checkbox', { name: 'Available now' })).toBeChecked()
-  await expect(cards(page)).toHaveCount(2)
 })
 
 for (const width of [375, 1200]) {
@@ -161,7 +151,7 @@ for (const width of [375, 1200]) {
       path: testInfo.outputPath(`filters-${width}.png`),
     })
 
-    await page.goto('/map')
+    await page.getByRole('link', { name: 'View on map' }).click()
     await expect(chips(page)).toHaveCount(5)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })

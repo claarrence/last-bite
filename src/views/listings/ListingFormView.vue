@@ -5,6 +5,7 @@ import NavBar from '@/components/NavBar.vue'
 import AddressPicker from '@/components/AddressPicker.vue'
 import LocationMap from '@/components/LocationMap.vue'
 import ListingCard from '@/components/listings/ListingCard.vue'
+import WebcamCapture from '@/components/WebcamCapture.vue'
 import { useToast } from '@/composables/useToast'
 import { useActionFeedback } from '@/composables/useActionFeedback'
 import { getCurrentUser, getEstablishmentLocation, isEstablishment } from '@/utils/session'
@@ -122,8 +123,19 @@ function revokePreview() {
   if (form.photoPreview.startsWith('blob:')) URL.revokeObjectURL(form.photoPreview)
 }
 
+// Cancelling the file dialog gives no file; keep whatever photo is already attached.
 function onPhoto(event) {
-  const file = event.target.files?.[0] ?? null
+  const file = event.target.files?.[0]
+  if (file) setPhoto(file)
+  event.target.value = '' // so choosing the same file again still counts as a change
+}
+
+const photoInput = ref(null)
+function choosePhoto() {
+  photoInput.value.click()
+}
+
+function setPhoto(file) {
   revokePreview()
   form.photoFile = file
   form.photoPreview = file
@@ -131,6 +143,15 @@ function onPhoto(event) {
     : form.existingPhotoPath
       ? photoUrl(form.existingPhotoPath)
       : ''
+}
+
+// "Take photo": phones and tablets open their camera through the file input's capture
+// attribute; computers show the webcam panel instead.
+const webcamOpen = ref(false)
+const cameraInput = ref(null)
+function takePhoto() {
+  if (window.matchMedia('(pointer: coarse)').matches) cameraInput.value.click()
+  else webcamOpen.value = true
 }
 
 const searchResults = ref([])
@@ -185,6 +206,9 @@ async function onMapPick({ lat, lng, address }) {
 const locating = ref(false)
 const locateError = ref('')
 
+// The map stays hidden until "Pick on map" is pressed.
+const showMap = ref(false)
+
 async function useMyLocation() {
   locateError.value = ''
   if (!('geolocation' in navigator)) {
@@ -237,6 +261,38 @@ const errors = computed(() => validateListing(form, { isEstablishment: establish
 // Only show errors once the user has tried to submit, then keep them live.
 function fieldError(field) {
   return submitted.value ? errors.value[field] : ''
+}
+
+// Required fields in the order they appear, for the ✓ marks and the "fill this next" pulse.
+// Businesses can post either listing type, so they confirm one first. It starts pre-selected,
+// so it only counts as done once they click an option.
+const typeChosen = ref(false)
+
+const requiredFields = computed(() => [
+  ...(establishment.value && !isEdit.value ? ['listingType'] : []),
+  'title',
+  'photo',
+  ...(form.listingType === 'discounted' ? ['price', 'quantityTotal'] : ['quantityLevel']),
+  'address',
+  'date',
+  'start',
+  'end',
+])
+
+function isDone(field) {
+  if (field === 'listingType') return typeChosen.value
+  return !errors.value[field]
+}
+
+// The first required field that is still empty or wrong, so it pulses from the moment the
+// page opens. Nothing pulses once every required field is filled in.
+const nextField = computed(() => requiredFields.value.find((field) => !isDone(field)) ?? null)
+
+// While a required field is still missing, everything else fades so the next field stands out.
+// Off after a failed submit, so every error message stays readable.
+const guided = computed(() => !!nextField.value && !submitted.value)
+function step(field) {
+  return { 'form-step': true, 'is-current': nextField.value === field }
 }
 
 const previewListing = computed(() => ({
@@ -325,11 +381,26 @@ async function submit() {
           }}
         </p>
 
-        <form novalidate data-testid="listing-form" @submit.prevent="submit">
+        <form
+          novalidate
+          :class="{ guided: guided }"
+          data-testid="listing-form"
+          @submit.prevent="submit"
+        >
           <!-- Listing type -->
-          <fieldset class="mb-4">
-            <legend class="form-label fw-semibold fs-6">Listing type</legend>
-            <div class="btn-group w-100" role="group" aria-label="Listing type">
+          <fieldset class="mb-4" :class="step('listingType')">
+            <legend class="form-label fw-semibold fs-6">
+              Listing type
+              <span v-if="establishment && !isEdit && isDone('listingType')" class="field-done"
+                >✓<span class="visually-hidden"> chosen</span></span
+              >
+            </legend>
+            <div
+              class="btn-group w-100 type-options"
+              :class="{ 'needs-attention': nextField === 'listingType' }"
+              role="group"
+              aria-label="Listing type"
+            >
               <input
                 id="type-free"
                 v-model="form.listingType"
@@ -339,6 +410,7 @@ async function submit() {
                 value="free"
                 :disabled="isEdit"
                 data-testid="type-free"
+                @click="typeChosen = true"
               />
               <label class="btn btn-outline-success flex-fill" for="type-free">
                 <span class="d-block fw-semibold">Buffet / Event food</span>
@@ -355,6 +427,7 @@ async function submit() {
                   value="discounted"
                   :disabled="isEdit"
                   data-testid="type-discounted"
+                  @click="typeChosen = true"
                 />
                 <label class="btn btn-outline-success flex-fill" for="type-discounted">
                   <span class="d-block fw-semibold">Reservation food</span>
@@ -371,15 +444,23 @@ async function submit() {
           </fieldset>
 
           <!-- Basics -->
-          <div class="mb-3">
-            <label for="title" class="form-label fw-semibold">Food item</label>
+          <div class="mb-3" :class="step('title')">
+            <label for="title" class="form-label fw-semibold"
+              >Food item
+              <span v-if="isDone('title')" class="field-done"
+                >✓<span class="visually-hidden"> filled in</span></span
+              ></label
+            >
             <input
               id="title"
               v-model="form.title"
               type="text"
               class="form-control"
               maxlength="80"
-              :class="{ 'is-invalid': fieldError('title') }"
+              :class="{
+                'is-invalid': fieldError('title'),
+                'needs-attention': nextField === 'title',
+              }"
               placeholder="e.g. Nasi lemak sets, Buffet pastries"
               autocomplete="off"
               data-testid="title"
@@ -387,40 +468,86 @@ async function submit() {
             <div class="invalid-feedback">{{ fieldError('title') }}</div>
           </div>
 
-          <div class="mb-3">
-            <label for="description" class="form-label fw-semibold"
-              >Description <span class="fw-normal text-secondary">(optional)</span></label
+          <div class="mb-3" :class="step('photo')">
+            <label for="photo" class="form-label fw-semibold d-block"
+              >Photograph
+              <span v-if="isDone('photo')" class="field-done"
+                >✓<span class="visually-hidden"> filled in</span></span
+              ></label
             >
-            <textarea
-              id="description"
-              v-model="form.description"
-              rows="3"
-              maxlength="500"
-              class="form-control"
-              :class="{ 'is-invalid': fieldError('description') }"
-              placeholder="What is it, how big is a portion, how was it prepared?"
-              data-testid="description"
-            ></textarea>
-            <div class="form-text text-end">{{ form.description.length }}/500</div>
-          </div>
-
-          <div class="mb-4">
-            <label for="photo" class="form-label fw-semibold"
-              >Photograph <span class="fw-normal text-secondary">(optional)</span></label
-            >
+            <!-- The browser's own file box can't show a webcam photo, so it stays hidden and
+                 these buttons and the "Photo added" card stand in for it. -->
             <input
               id="photo"
+              ref="photoInput"
               type="file"
               accept="image/*"
-              class="form-control"
-              :class="{ 'is-invalid': fieldError('photo') }"
+              class="visually-hidden"
+              tabindex="-1"
               data-testid="photo"
               @change="onPhoto"
             />
-            <div class="invalid-feedback">{{ fieldError('photo') }}</div>
+            <div
+              v-if="form.photoPreview"
+              class="photo-added d-flex align-items-center gap-3"
+              data-testid="photo-added"
+            >
+              <img :src="form.photoPreview" alt="Your food photo" class="photo-thumb" />
+              <div class="flex-grow-1 min-w-0">
+                <div class="fw-semibold photo-added-title">✓ Photo added</div>
+                <div class="small text-secondary text-truncate">
+                  {{ form.photoFile ? form.photoFile.name : 'Current photo' }}
+                </div>
+              </div>
+            </div>
+            <div
+              class="d-inline-flex flex-wrap gap-2 rounded-3"
+              :class="{
+                'mt-2': form.photoPreview,
+                'needs-attention': nextField === 'photo',
+              }"
+            >
+              <button
+                type="button"
+                class="btn btn-outline-success"
+                :class="{ 'btn-sm': form.photoPreview }"
+                data-testid="choose-photo"
+                @click="choosePhoto"
+              >
+                {{ form.photoPreview ? 'Choose another' : 'Choose file' }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-success text-nowrap"
+                :class="{ 'btn-sm': form.photoPreview }"
+                data-testid="take-photo"
+                @click="takePhoto"
+              >
+                <span aria-hidden="true">📷</span>
+                {{ form.photoPreview ? 'Retake' : 'Take photo' }}
+              </button>
+              <!-- capture opens the camera straight away on phones and tablets. -->
+              <input
+                id="photo-camera"
+                ref="cameraInput"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                class="visually-hidden"
+                tabindex="-1"
+                aria-hidden="true"
+                data-testid="photo-camera"
+                @change="onPhoto"
+              />
+            </div>
+            <WebcamCapture v-if="webcamOpen" @capture="setPhoto" @close="webcamOpen = false" />
+            <!-- d-block: the input is wrapped, so Bootstrap can't show this automatically. -->
+            <div v-if="fieldError('photo')" class="invalid-feedback d-block">
+              {{ fieldError('photo') }}
+            </div>
             <div class="form-text">
               Image file, up to 5 MB.
-              <template v-if="isEdit">Leave empty to keep the current photo.</template>
+              <template v-if="isEdit">Leave it as is to keep the current photo.</template>
             </div>
           </div>
 
@@ -430,8 +557,13 @@ async function submit() {
             class="row g-3 mb-4"
             data-testid="discounted-fields"
           >
-            <div class="col-sm-6">
-              <label for="price" class="form-label fw-semibold">Price per portion</label>
+            <div class="col-sm-6" :class="step('price')">
+              <label for="price" class="form-label fw-semibold"
+                >Price per portion
+                <span v-if="isDone('price')" class="field-done"
+                  >✓<span class="visually-hidden"> filled in</span></span
+                ></label
+              >
               <div class="input-group has-validation">
                 <span class="input-group-text">S$</span>
                 <input
@@ -442,14 +574,22 @@ async function submit() {
                   step="0.01"
                   inputmode="decimal"
                   class="form-control"
-                  :class="{ 'is-invalid': fieldError('price') }"
+                  :class="{
+                    'is-invalid': fieldError('price'),
+                    'needs-attention': nextField === 'price',
+                  }"
                   data-testid="price"
                 />
                 <div class="invalid-feedback">{{ fieldError('price') }}</div>
               </div>
             </div>
-            <div class="col-sm-6">
-              <label for="quantity" class="form-label fw-semibold">Portions available</label>
+            <div class="col-sm-6" :class="step('quantityTotal')">
+              <label for="quantity" class="form-label fw-semibold"
+                >Portions available
+                <span v-if="isDone('quantityTotal')" class="field-done"
+                  >✓<span class="visually-hidden"> filled in</span></span
+                ></label
+              >
               <input
                 id="quantity"
                 v-model="form.quantityTotal"
@@ -458,16 +598,27 @@ async function submit() {
                 step="1"
                 inputmode="numeric"
                 class="form-control"
-                :class="{ 'is-invalid': fieldError('quantityTotal') }"
+                :class="{
+                  'is-invalid': fieldError('quantityTotal'),
+                  'needs-attention': nextField === 'quantityTotal',
+                }"
                 data-testid="quantity"
               />
               <div class="invalid-feedback">{{ fieldError('quantityTotal') }}</div>
             </div>
           </div>
 
-          <fieldset v-else class="mb-4" data-testid="free-fields">
-            <legend class="form-label fw-semibold fs-6">Roughly how much is left?</legend>
-            <div class="d-flex flex-wrap gap-2">
+          <fieldset v-else class="mb-4" :class="step('quantityLevel')" data-testid="free-fields">
+            <legend class="form-label fw-semibold fs-6">
+              Roughly how much is left?
+              <span v-if="isDone('quantityLevel')" class="field-done"
+                >✓<span class="visually-hidden"> filled in</span></span
+              >
+            </legend>
+            <div
+              class="d-flex flex-wrap gap-2 rounded-3"
+              :class="{ 'needs-attention': nextField === 'quantityLevel' }"
+            >
               <template v-for="level in QUANTITY_LEVELS" :key="level.value">
                 <input
                   :id="`qty-${level.value}`"
@@ -491,36 +642,17 @@ async function submit() {
           </fieldset>
 
           <!-- Pickup -->
-          <div class="mb-3">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-              <label for="address" class="form-label fw-semibold mb-0">Pickup location</label>
-              <button
-                type="button"
-                class="btn btn-outline-success btn-sm"
-                :disabled="locating || geocoding"
-                data-testid="use-my-location"
-                @click="useMyLocation"
-              >
-                <span
-                  v-if="locating"
-                  class="spinner-border spinner-border-sm"
-                  aria-hidden="true"
-                ></span>
-                {{ locating ? 'Finding your location…' : 'Use my location' }}
-              </button>
-            </div>
-            <div
-              v-if="locateError"
-              class="text-danger small mt-2"
-              role="alert"
-              data-testid="locate-error"
+          <div class="mb-3" :class="step('address')">
+            <label for="address" class="form-label fw-semibold"
+              >Pickup location
+              <span v-if="isDone('address')" class="field-done"
+                >✓<span class="visually-hidden"> filled in</span></span
+              ></label
             >
-              {{ locateError }}
-            </div>
-
             <AddressPicker
               id="address"
               v-model="form.address"
+              :class="{ 'needs-attention': nextField === 'address' }"
               :invalid="!!fieldError('address')"
               :pinned="form.lat != null && form.lng != null"
               placeholder="Enter an address or search OneMap"
@@ -538,69 +670,112 @@ async function submit() {
             </AddressPicker>
             <div class="form-text">
               <template v-if="geocoding">Looking up address…</template>
-              <template v-else>Type an address. Map selection is optional.</template>
+              <template v-else>Type an address, or use one of these:</template>
             </div>
-            <LocationMap
-              class="mt-2"
-              :results="searchResults"
-              :lat="form.lat"
-              :lng="form.lng"
-              @pick="onMapPick"
-            />
-          </div>
-
-          <div class="mb-3">
-            <label for="instructions" class="form-label fw-semibold"
-              >Collection instructions
-              <span class="fw-normal text-secondary">(optional)</span></label
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <button
+                type="button"
+                class="btn btn-outline-success btn-sm"
+                :disabled="locating || geocoding"
+                data-testid="use-my-location"
+                @click="useMyLocation"
+              >
+                <span
+                  v-if="locating"
+                  class="spinner-border spinner-border-sm"
+                  aria-hidden="true"
+                ></span>
+                <span v-else aria-hidden="true">📍</span>
+                {{ locating ? 'Finding your location…' : 'Use my location' }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-success btn-sm"
+                :aria-expanded="showMap"
+                data-testid="pick-on-map"
+                @click="showMap = !showMap"
+              >
+                <span aria-hidden="true">🗺️</span> {{ showMap ? 'Hide map' : 'Pick on map' }}
+              </button>
+            </div>
+            <div
+              v-if="locateError"
+              class="text-danger small mt-2"
+              role="alert"
+              data-testid="locate-error"
             >
-            <input
-              id="instructions"
-              v-model="form.collectionInstructions"
-              type="text"
-              class="form-control"
-              placeholder="e.g. Back counter, ask for Mr Tan · Bring your own container"
-              data-testid="instructions"
-            />
+              {{ locateError }}
+            </div>
+            <template v-if="showMap">
+              <LocationMap
+                class="mt-2"
+                :results="searchResults"
+                :lat="form.lat"
+                :lng="form.lng"
+                @pick="onMapPick"
+              />
+              <div class="form-text">Click the map to drop the pickup pin.</div>
+            </template>
           </div>
 
           <div class="row g-2 mb-4">
-            <div class="col-12">
-              <label for="date" class="form-label fw-semibold">Collection date</label>
+            <div class="col-12" :class="step('date')">
+              <label for="date" class="form-label fw-semibold"
+                >Collection date
+                <span v-if="isDone('date')" class="field-done"
+                  >✓<span class="visually-hidden"> filled in</span></span
+                ></label
+              >
               <input
                 id="date"
                 v-model="form.date"
                 type="date"
                 :min="today"
                 class="form-control"
-                :class="{ 'is-invalid': fieldError('date') }"
+                :class="{
+                  'is-invalid': fieldError('date'),
+                  'needs-attention': nextField === 'date',
+                }"
                 data-testid="date"
               />
               <div class="invalid-feedback">{{ fieldError('date') }}</div>
             </div>
-            <div class="col-12 col-sm-6">
-              <label for="start" class="form-label fw-semibold">From</label>
+            <div class="col-12 col-sm-6" :class="step('start')">
+              <label for="start" class="form-label fw-semibold"
+                >From
+                <span v-if="isDone('start')" class="field-done"
+                  >✓<span class="visually-hidden"> filled in</span></span
+                ></label
+              >
               <input
                 id="start"
                 v-model="form.start"
                 type="time"
                 step="60"
                 class="form-control"
-                :class="{ 'is-invalid': fieldError('start') }"
+                :class="{
+                  'is-invalid': fieldError('start'),
+                  'needs-attention': nextField === 'start',
+                }"
                 data-testid="start"
                 @click="$event.target.showPicker?.()"
               />
               <div class="invalid-feedback">{{ fieldError('start') }}</div>
             </div>
-            <div class="col-12 col-sm-6">
-              <label for="end" class="form-label fw-semibold">Until</label>
+            <div class="col-12 col-sm-6" :class="step('end')">
+              <label for="end" class="form-label fw-semibold"
+                >Until
+                <span v-if="isDone('end')" class="field-done"
+                  >✓<span class="visually-hidden"> filled in</span></span
+                ></label
+              >
               <input
                 id="end"
                 v-model="form.end"
                 type="time"
                 step="60"
                 class="form-control"
-                :class="{ 'is-invalid': fieldError('end') }"
+                :class="{ 'is-invalid': fieldError('end'), 'needs-attention': nextField === 'end' }"
                 data-testid="end"
                 @click="$event.target.showPicker?.()"
               />
@@ -608,43 +783,83 @@ async function submit() {
             </div>
           </div>
 
-          <!-- Dietary & allergens -->
-          <fieldset class="mb-3">
-            <legend class="form-label fw-semibold fs-6">
-              Dietary tags <span class="fw-normal text-secondary">(optional)</span>
-            </legend>
-            <div v-for="tag in DIETARY_TAGS" :key="tag" class="form-check form-check-inline">
-              <input
-                :id="`diet-${tag}`"
-                v-model="form.dietaryTags"
-                type="checkbox"
-                :value="tag"
-                class="form-check-input"
-              />
-              <label class="form-check-label" :for="`diet-${tag}`">{{ tag }}</label>
+          <!-- Optional details: everything below can be left empty -->
+          <section class="optional-details form-step" aria-labelledby="optional-details-heading">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <h2 id="optional-details-heading" class="h6 fw-semibold mb-0">More details</h2>
+              <span class="optional-pill">Optional</span>
             </div>
-          </fieldset>
+            <p class="small text-secondary mb-3">
+              You can post without these. Adding them helps people decide and find the food.
+            </p>
 
-          <fieldset class="mb-4">
-            <legend class="form-label fw-semibold fs-6">
-              Contains <span class="fw-normal text-secondary">(optional)</span>
-            </legend>
-            <div v-for="allergen in ALLERGENS" :key="allergen" class="form-check form-check-inline">
+            <div class="mb-3">
+              <label for="description" class="form-label fw-semibold">Description</label>
+              <textarea
+                id="description"
+                v-model="form.description"
+                rows="3"
+                maxlength="500"
+                class="form-control"
+                :class="{ 'is-invalid': fieldError('description') }"
+                placeholder="What is it, how big is a portion, how was it prepared?"
+                data-testid="description"
+              ></textarea>
+              <div class="form-text text-end">{{ form.description.length }}/500</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="instructions" class="form-label fw-semibold"
+                >Collection instructions</label
+              >
               <input
-                :id="`allergen-${allergen}`"
-                type="checkbox"
-                class="form-check-input"
-                :checked="form.allergens.includes(allergen)"
-                :data-testid="`allergen-${allergen}`"
-                @change="toggleAllergen(allergen, $event.target.checked)"
+                id="instructions"
+                v-model="form.collectionInstructions"
+                type="text"
+                class="form-control"
+                placeholder="e.g. Back counter, ask for Mr Tan · Bring your own container"
+                data-testid="instructions"
               />
-              <label class="form-check-label" :for="`allergen-${allergen}`">{{ allergen }}</label>
             </div>
-            <div class="form-text">Choose "Unknown" if you're not sure what's in it.</div>
-            <div v-if="fieldError('allergens')" class="text-danger small mt-1">
-              {{ errors.allergens }}
-            </div>
-          </fieldset>
+
+            <!-- Dietary & allergens -->
+            <fieldset class="mb-3">
+              <legend class="form-label fw-semibold fs-6">Dietary tags</legend>
+              <div v-for="tag in DIETARY_TAGS" :key="tag" class="form-check form-check-inline">
+                <input
+                  :id="`diet-${tag}`"
+                  v-model="form.dietaryTags"
+                  type="checkbox"
+                  :value="tag"
+                  class="form-check-input"
+                />
+                <label class="form-check-label" :for="`diet-${tag}`">{{ tag }}</label>
+              </div>
+            </fieldset>
+
+            <fieldset class="mb-4">
+              <legend class="form-label fw-semibold fs-6">Contains</legend>
+              <div
+                v-for="allergen in ALLERGENS"
+                :key="allergen"
+                class="form-check form-check-inline"
+              >
+                <input
+                  :id="`allergen-${allergen}`"
+                  type="checkbox"
+                  class="form-check-input"
+                  :checked="form.allergens.includes(allergen)"
+                  :data-testid="`allergen-${allergen}`"
+                  @change="toggleAllergen(allergen, $event.target.checked)"
+                />
+                <label class="form-check-label" :for="`allergen-${allergen}`">{{ allergen }}</label>
+              </div>
+              <div class="form-text">Choose "Unknown" if you're not sure what's in it.</div>
+              <div v-if="fieldError('allergens')" class="text-danger small mt-1">
+                {{ errors.allergens }}
+              </div>
+            </fieldset>
+          </section>
 
           <div
             v-if="submitted && Object.keys(errors).length"
@@ -655,7 +870,7 @@ async function submit() {
             Please fix the highlighted fields.
           </div>
 
-          <div class="d-flex flex-column flex-sm-row gap-2">
+          <div class="d-flex flex-column flex-sm-row gap-2 form-step">
             <button
               type="submit"
               class="btn btn-success flex-grow-1"
@@ -681,8 +896,9 @@ async function submit() {
         </form>
       </div>
 
-      <!-- Live preview -->
-      <aside class="col-lg-5">
+      <!-- Live preview: beside the form on desktop only. On phones and tablets it would
+           sit below the whole form, out of sight while filling it in. -->
+      <aside class="col-lg-5 d-none d-lg-block">
         <div class="preview">
           <h2 class="h6 text-uppercase text-secondary fw-semibold mb-2">Live preview</h2>
           <div data-testid="preview">
@@ -698,6 +914,124 @@ async function submit() {
 </template>
 
 <style scoped>
+/* Separates the optional fields from the required ones above. */
+/* Shown once a photo is attached, so it's obvious the field is done. */
+.photo-added {
+  padding: 10px;
+  border: 1px solid #b9dcc5;
+  border-radius: 12px;
+  background: #eef7f1;
+}
+.photo-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.photo-added-title {
+  color: #2f7d4f;
+}
+.min-w-0 {
+  min-width: 0;
+}
+/* Green tick beside a required field's label once it's filled in. */
+.field-done {
+  margin-left: 4px;
+  color: #2f7d4f;
+  font-weight: 700;
+}
+/* The next required field to fill: a solid red outline with a glow that keeps
+   spreading out from it, and a light red tint that comes and goes. */
+.needs-attention {
+  border-color: var(--color-accent);
+  border-radius: var(--bs-border-radius);
+  animation: attention-pulse 1.2s ease-out infinite;
+}
+@keyframes attention-pulse {
+  0% {
+    background-color: rgba(173, 69, 50, 0.12);
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 2px rgba(173, 69, 50, 0.6);
+  }
+  70% {
+    background-color: rgba(173, 69, 50, 0.03);
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 12px rgba(173, 69, 50, 0);
+  }
+  100% {
+    background-color: rgba(173, 69, 50, 0.12);
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 12px rgba(173, 69, 50, 0);
+  }
+}
+/* Without motion: a steady, thick outline instead of a pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .needs-attention {
+    animation: none;
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 6px rgba(173, 69, 50, 0.25);
+  }
+}
+/* Guided mode: every field except the next one to fill fades. Hovering over or
+   clicking into a faded field brings it straight back, so the form can still be filled in
+   any order. */
+.form-step {
+  transition: opacity 0.3s;
+}
+.guided .form-step:not(.is-current):not(:hover):not(:focus-within) {
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .form-step {
+    transition: none;
+  }
+}
+/* Optional fields sit in their own tinted box, so it's clear they can be skipped. */
+.optional-details {
+  margin: 8px 0 24px;
+  padding: 20px;
+  border: 1px dashed var(--color-line);
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+.optional-pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-line);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* Phones: the two listing types stack instead of squeezing their text onto two lines,
+   and the optional box gives back some of its inner padding. */
+@media (max-width: 575px) {
+  .type-options {
+    flex-direction: column;
+  }
+  .type-options > .btn {
+    margin-left: 0 !important;
+    border-radius: var(--bs-border-radius) !important;
+  }
+  .type-options > .btn + .btn {
+    margin-top: -1px !important;
+  }
+  .type-options > .btn:first-of-type {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  .type-options > .btn:last-of-type:not(:first-of-type) {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+  .optional-details {
+    padding: 16px;
+  }
+}
 @media (min-width: 992px) {
   .preview {
     position: sticky;

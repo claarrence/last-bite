@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useFiltersStore } from '@/stores/filters'
 
@@ -37,7 +36,6 @@ const shown = (filters) =>
 let filters
 
 beforeEach(() => {
-  localStorage.clear()
   setActivePinia(createPinia())
   filters = useFiltersStore()
 })
@@ -141,28 +139,5 @@ describe('removeTagFunction and clearAllFunction', () => {
     filters.clearAllFunction()
     expect(filters.activeTagsComputed).toEqual([])
     expect(filters.sortBy).toBe('ending')
-  })
-})
-
-describe('remembering filters', () => {
-  it('restores saved filters in a new store, but not the sort order', async () => {
-    filters.foodType = 'free'
-    filters.selectedDietary = ['Halal']
-    filters.availableNow = true
-    filters.sortBy = 'ending'
-    await nextTick() // the save runs after Vue notices the change
-
-    setActivePinia(createPinia()) // like refreshing the page
-    const reloaded = useFiltersStore()
-    expect(reloaded.foodType).toBe('free')
-    expect(reloaded.selectedDietary).toEqual(['Halal'])
-    expect(reloaded.availableNow).toBe(true)
-    expect(reloaded.sortBy).toBe('newest')
-  })
-
-  it('starts empty when the saved data is unreadable', () => {
-    localStorage.setItem('lastbite-filters', '{not json')
-    setActivePinia(createPinia())
-    expect(useFiltersStore().activeTagsComputed).toEqual([])
   })
 })
