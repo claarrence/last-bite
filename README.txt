@@ -9,6 +9,7 @@ Stack:    Vue 3 (Vite), Vue Router, Pinia, Bootstrap 5, Axios, Supabase, OneMap
 
 DEMO ACCOUNTS
 -------------
+  Account type: Email / Password
   User:           demo.user@lastbite.test / DemoUser123!
   Establishment:  demo.provider@lastbite.test / DemoProvider123!
 
