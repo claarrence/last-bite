@@ -12,6 +12,13 @@ DEMO ACCOUNTS
   User:           drbingo@gmail.com / drbingo
   Establishment:  business2@gmail.com / businessing
 
+The two accounts share demo data, so both sides of the app have something to show:
+  - Chicken rice lunch sets (business2, pickup 5 Dec 2026): the user has an
+    active booking for 2 portions. To confirm it, enter the pickup number from
+    the user's My Reservations on the establishment's listing page.
+  - Tofu and greens salad bowls (business2, pickup 5 Dec 2026): already
+    collected, with the user's 5-star review and the establishment's reply.
+
 
 SETUP AND RUN
 -------------
