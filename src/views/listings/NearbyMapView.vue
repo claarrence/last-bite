@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import L from 'leaflet'
 import NavBar from '@/components/NavBar.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import { getAvailableListings } from '@/utils/listings'
+import { getAvailableListings, photoUrl } from '@/utils/listings'
 import { formatPickupWindow, formatPrice } from '@/utils/format'
 import { useFiltersStore } from '@/stores/filters'
 import {
@@ -125,21 +125,36 @@ function priceText(listing) {
   return listing.listing_type === 'discounted' ? `${formatPrice(listing.price)} each` : 'Free'
 }
 
+// Built with plain DOM because Leaflet popups live outside Vue. Styled by the map-popup
+// classes in main.css (scoped styles don't reach popups).
 function popupContent({ listing, km }) {
   const box = document.createElement('div')
-  const title = document.createElement('strong')
+  box.className = 'map-popup'
+  const url = photoUrl(listing.photo_path)
+  // Listings without a photo skip it rather than show a broken image.
+  if (url) {
+    const photo = document.createElement('img')
+    photo.src = url
+    photo.alt = ''
+    photo.className = 'map-popup-photo'
+    box.append(photo)
+  }
+  const title = document.createElement('div')
+  title.className = 'map-popup-title'
   title.textContent = listing.title
   const meta = document.createElement('div')
-  meta.className = 'small text-secondary'
-  meta.textContent = [priceText(listing), km != null && formatDistance(km)]
-    .filter(Boolean)
-    .join(' · ')
+  meta.className = 'map-popup-meta'
+  const price = document.createElement('span')
+  price.className = 'map-popup-price'
+  price.textContent = priceText(listing)
+  meta.append(price)
+  if (km != null) meta.append(` · ${formatDistance(km)}`)
   const when = document.createElement('div')
-  when.className = 'small'
+  when.className = 'map-popup-when'
   when.textContent = formatPickupWindow(listing.pickup_start, listing.pickup_end)
   const link = document.createElement('a')
   link.href = router.resolve({ name: 'listing-detail', params: { id: listing.id } }).href
-  link.className = 'small fw-semibold d-inline-block mt-1'
+  link.className = 'map-popup-link'
   link.textContent = 'View listing →'
   // Navigate inside the SPA instead of reloading the page.
   link.addEventListener('click', (event) => {
@@ -333,17 +348,31 @@ watch(here, drawHere)
                 data-testid="map-list-item"
                 @click="focusPin(listing.id)"
               >
-                <span class="d-flex justify-content-between gap-2">
-                  <strong class="text-break">{{ listing.title }}</strong>
-                  <span v-if="km != null" class="small text-nowrap">{{ formatDistance(km) }}</span>
+                <span class="d-flex gap-3">
+                  <img
+                    v-if="photoUrl(listing.photo_path)"
+                    :src="photoUrl(listing.photo_path)"
+                    alt=""
+                    class="nearby-thumb"
+                    loading="lazy"
+                  />
+                  <span v-else class="nearby-thumb" aria-hidden="true"></span>
+                  <span class="nearby-text">
+                    <span class="d-flex justify-content-between gap-2">
+                      <strong class="text-break">{{ listing.title }}</strong>
+                      <span v-if="km != null" class="small text-nowrap">{{
+                        formatDistance(km)
+                      }}</span>
+                    </span>
+                    <span class="d-block small">
+                      {{ priceText(listing) }}
+                      · {{ formatPickupWindow(listing.pickup_start, listing.pickup_end) }}
+                    </span>
+                    <span class="d-block small text-secondary text-truncate">{{
+                      listing.address
+                    }}</span>
+                  </span>
                 </span>
-                <span class="d-block small">
-                  {{ priceText(listing) }}
-                  · {{ formatPickupWindow(listing.pickup_start, listing.pickup_end) }}
-                </span>
-                <span class="d-block small text-secondary text-truncate">{{
-                  listing.address
-                }}</span>
               </button>
             </div>
           </template>
@@ -409,6 +438,19 @@ watch(here, drawHere)
   transition:
     background 220ms,
     border-color 220ms;
+}
+.nearby-thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--color-line);
+}
+/* min-width: 0 lets a long address shrink and truncate next to the photo. */
+.nearby-text {
+  flex: 1;
+  min-width: 0;
 }
 .nearby-item:hover {
   border-color: var(--color-peach);

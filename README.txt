@@ -182,6 +182,7 @@ THIRD-PARTY LIBRARIES
 Vue, Vue Router, Pinia (shared state), Bootstrap, Axios, Supabase JS, Leaflet
 (maps) and Three.js (homepage rendering). All are free,
 open-source libraries installed through pnpm (see package.json).
+The Inter typeface is loaded from Google Fonts (free, SIL Open Font License).
 
 
 TEAM NOTES (TEMPORARY)
@@ -360,3 +361,16 @@ parts of this feature.
     - The map's control row layout fixes (CSS: distance menu width, wrapping
       on phones).
     - src/stores/__tests__/filters.spec.js and e2e/filters.spec.js.
+    - Food photos in the map list and pin popups, and the popup styling.
+
+Post food form and site font (requested by Ryan; written by AI):
+  - Inter font for body text (index.html, main.css).
+  - ListingFormView.vue: optional fields grouped in a "More details" box;
+    the photo made required (listingValidation.js and its tests); Choose
+    file / Take photo buttons with a "Photo added" thumbnail; the webcam
+    panel (WebcamCapture.vue, using the browser's getUserMedia camera API);
+    ticks on filled required fields, a pulse on the next one and fading of
+    the rest; "Use my location" / "Pick on map" with the map hidden until
+    asked; the live preview shown on desktop only.
+  - The matching updates to e2e/posting.spec.js and
+    e2e/establishment-location.spec.js.
