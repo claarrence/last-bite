@@ -210,7 +210,8 @@ async function login() {
     .eq('id', data.user.id)
     .single()
   if (profileError) {
-    alert(profileError.message)
+    await supabase.auth.signOut()
+    alert('No account of this type found. Check whether you selected the right account type.')
     return
   }
   redirectAfterLogin(role.value === 'user' ? 'home' : 'establishment-dashboard')
