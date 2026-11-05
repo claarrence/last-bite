@@ -39,11 +39,6 @@ const router = createRouter({
       component: AuthView,
     },
     {
-      path: '/team-notes',
-      name: 'team-notes',
-      component: () => import('@/views/TeamNotesView.vue'),
-    },
-    {
       path: '/establishment-dashboard',
       name: 'establishment-dashboard',
       component: Dashboard,

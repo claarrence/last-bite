@@ -10,7 +10,7 @@ Built with Vue 3 (Vite), Vue Router, Pinia, Bootstrap 5, Axios, Supabase and One
 
 LIVE APPLICATION
 ----------------
-Landing page URL: TODO (add the deployed URL)
+Landing page URL: https://last-bite-gamma.vercel.app
 
 
 DEMO ACCOUNTS
@@ -189,19 +189,6 @@ open-source libraries installed through pnpm (see package.json).
 The Inter typeface is loaded from Google Fonts (free, SIL Open Font License).
 
 
-TEAM NOTES (TEMPORARY)
-----------------------
-Open /team-notes, or use the Team notes link in the footer, for the current
-feature handover and shared project working notes. No login is needed.
-Contributors and coding assistants should read src/content/teamNotes.js before
-changing the app. These notes describe target behaviour as well as work still
-to do; the feature cards distinguish what is currently available.
-
-To remove this temporary page before submission: remove the /team-notes route,
-the footer link, src/views/TeamNotesView.vue and src/content/teamNotes.js, and
-update this section. Keep any project guidance the group still needs elsewhere.
-
-
 ACTION ANIMATION
 ----------------
 The plate/food SVG and CSS keyframes remain in src/components/FoodLoader.vue.
@@ -216,11 +203,8 @@ blocks background controls and restores focus afterwards. Validation errors
 remain immediate; backend errors still preserve entered details.
 
 The artwork respects reduced motion. No animation library is required.
-Preview it with the two-second button on /team-notes. Simply opening the Post
-food page does not trigger the animation; submitting its form does.
-
-Course references also include the supplied Week 10 Testing (v1.1) and Week 11
-Vue Part 4 (v1.1) decks; their summaries are on the Team notes page.
+Simply opening the Post food page does not trigger the animation; submitting
+its form does.
 
 Page-load stability: route changes and browser history restore their scroll
 position immediately. Smooth scrolling is used only for a Browse food link

@@ -114,7 +114,7 @@ for (const width of [375, 1200]) {
 }
 
 test('the footer logo links home', async ({ page }) => {
-  await page.goto('/team-notes')
+  await page.goto('/auth')
   await page.locator('footer').getByRole('link', { name: 'Last Bite home', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.locator('.home-hero')).toBeVisible()
