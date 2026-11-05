@@ -23,8 +23,10 @@ The two accounts share demo data, so both sides of the app have something to sho
 SETUP AND RUN
 -------------
 Requires Node.js 22.18+ (or 24.12+) and pnpm.
-  pnpm install -> check .env (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY;
-  .env.example lists every setting) -> pnpm dev -> open http://localhost:5173
+  pnpm install -> check .env (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)
+  -> pnpm dev -> open http://localhost:5173
+The submitted zip includes .env. It is not in GitHub: after cloning, copy
+.env.example to .env and fill in the values.
 Production build: pnpm build (output in dist/, entry dist/index.html)
 
 
