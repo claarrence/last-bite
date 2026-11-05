@@ -49,6 +49,9 @@ function reservationFor(listing, overrides = {}) {
 
 async function logIn(page, redirect, establishment = false) {
   await page.route('**/auth/v1/token**', (route) => route.fulfill({ json: session }))
+  await page.route('**/rest/v1/rpc/is_establishment', (route) =>
+    route.fulfill({ json: establishment }),
+  )
   await page.route(`**/rest/v1/${establishment ? 'establishment' : 'normal_user'}*`, (route) =>
     route.fulfill({ json: { name: 'Test user' } }),
   )
@@ -141,6 +144,109 @@ test('a fully reserved listing cannot be booked', async ({ page }) => {
   await logIn(page, `/listings/${listingId}`)
   await expect(page.getByTestId('sold-out')).toBeVisible()
   await expect(page.getByTestId('reserve-button')).toHaveCount(0)
+})
+
+test('establishments can browse another provider but cannot reserve food', async ({ page }) => {
+  await page.route('**/rest/v1/listings*', (route) =>
+    route.fulfill({ json: discountedListing() }),
+  )
+  await page.route('**/rest/v1/rpc/reserved_quantities', (route) =>
+    route.fulfill({ json: [] }),
+  )
+  await logIn(page, `/listings/${listingId}`, true)
+  await expect(page.getByTestId('listing-detail')).toContainText('Chicken rice boxes')
+  await expect(page.getByTestId('detail-quantity')).toHaveText('8 of 8 portions left')
+  await expect(page.getByTestId('reserve-panel')).toHaveCount(0)
+  await expect(page.getByTestId('provider-reservations')).toHaveCount(0)
+})
+
+for (const width of [375, 1200]) {
+  test(`establishment manages incoming orders and navigation at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 })
+    const listing = discountedListing({ owner_id: userId })
+    const bookings = [
+      { ...reservationFor(listing, { customer_id: providerId, pickup_code: '012345' }), listing },
+      { ...reservationFor(listing, { id: 'collected', customer_id: providerId, status: 'collected', pickup_code: '234567' }), listing },
+      { ...reservationFor(listing, { id: 'cancelled', customer_id: providerId, status: 'cancelled', pickup_code: '345678' }), listing },
+      { ...reservationFor(listing, { id: 'expired', customer_id: providerId, pickup_code: '456789' }),
+        listing: { ...listing, id: 'older-listing', title: 'Salad bowls', pickup_end: new Date(Date.now() - hour).toISOString() } },
+    ]
+    let sentBody
+    let ownerFilter
+    await page.route('**/rest/v1/reservations*', (route) => {
+      const params = new URL(route.request().url()).searchParams
+      ownerFilter = params.get('listing.owner_id')
+      expect(params.has('customer_id')).toBe(false)
+      expect(params.get('select')).toContain('listing:listings!inner')
+      return route.fulfill({ json: bookings })
+    })
+    await page.route('**/rest/v1/rpc/mark_reservation_collected', (route) => {
+      sentBody = route.request().postDataJSON()
+      bookings[0].status = 'collected'
+      return route.fulfill({ json: bookings[0] })
+    })
+    await page.route('**/rest/v1/rpc/establishment_profile', (route) =>
+      route.fulfill({ json: [{ id: userId, name: 'Test hotel', business_type: 'Hotel' }] }),
+    )
+    await page.route('**/rest/v1/reviews*', (route) => route.fulfill({ json: [] }))
+    await logIn(page, '/my-reservations', true)
+    await expect(page).toHaveURL(/\/my-reservations$/)
+    await expect(page.getByTestId('reservation-code')).toHaveText('012345')
+    expect(ownerFilter).toBe(`eq.${userId}`)
+    await expect(page.getByTestId('save-quantity-button')).toHaveCount(0)
+    await expect(page.getByTestId('cancel-reservation-button')).toHaveCount(0)
+    await expect(page.getByTestId('review-prompt')).toHaveCount(0)
+    await expect(page.getByTestId('reservation-tab-reserved')).toContainText('1')
+
+    await page.getByTestId('reservation-tab-cancelled').click()
+    await expect(page.getByTestId('reservation-code')).toHaveText('345678')
+    await expect(page.getByTestId('collect-reservation-button')).toHaveCount(0)
+    await page.getByTestId('reservation-tab-expired').click()
+    await expect(page.getByTestId('reservation-card')).toContainText('Salad bowls')
+    await expect(page.getByTestId('reservation-code')).toHaveText('456789')
+    await page.getByTestId('reservation-tab-reserved').click()
+    await page.getByTestId('collect-reservation-button').click()
+    const dialog = page.getByTestId('confirm-dialog')
+    await expect(dialog).toContainText('012345')
+    await dialog.getByTestId('confirm-button').click()
+    await expect(page.getByTestId('action-feedback')).toBeVisible()
+    await expect(page.getByTestId('reservations-empty')).toBeVisible()
+    expect(sentBody).toEqual({ p_listing_id: listingId, p_pickup_code: '012345' })
+    await page.getByTestId('reservation-tab-collected').click()
+    await expect(page.getByTestId('reservation-card')).toHaveCount(2)
+    await expect(page.getByTestId('review-link')).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`incoming-orders-${width}.png`), fullPage: true, animations: 'disabled' })
+
+    await page.getByTestId('avatar-button').click()
+    await page.getByRole('link', { name: 'My reviews', exact: true }).click()
+    await expect(page.getByTestId('establishment-name')).toHaveText('Test hotel')
+    // eslint-disable-next-line playwright/no-conditional-in-test -- the mobile navigation needs opening
+    if (width === 375) await page.getByRole('button', { name: 'Toggle navigation' }).click()
+    await page.getByRole('navigation').getByRole('link', { name: 'My reservations', exact: true }).click()
+    await expect(page).toHaveURL(/\/my-reservations$/)
+    await expect(page.getByTestId('reservations-empty')).toBeVisible()
+    await page.reload()
+    await expect(page).toHaveURL(/\/my-reservations$/)
+    await expect(page.getByTestId('reservations-empty')).toBeVisible()
+  })
+}
+
+test('failed provider collection keeps the order active for retry', async ({ page }) => {
+  const listing = discountedListing({ owner_id: userId })
+  await page.route('**/rest/v1/reservations*', (route) =>
+    route.fulfill({ json: [{ ...reservationFor(listing, { customer_id: providerId }), listing }] }),
+  )
+  await page.route('**/rest/v1/rpc/mark_reservation_collected', (route) =>
+    route.fulfill({ status: 400, json: { code: 'P0001', message: 'Collection could not be confirmed.' } }),
+  )
+  await logIn(page, '/my-reservations', true)
+  await page.getByTestId('collect-reservation-button').click()
+  await page.getByTestId('confirm-dialog').getByTestId('confirm-button').click()
+  await expect(page.getByTestId('toast')).toContainText('Collection could not be confirmed.')
+  await expect(page.getByTestId('reservation-status')).toHaveText('Reserved')
+  await expect(page.getByTestId('reservation-code')).toHaveText('482913')
+  await expect(page.getByTestId('confirm-dialog').getByTestId('confirm-button')).toBeEnabled()
 })
 
 test('My Reservations changes the quantity and cancels a booking', async ({ page }) => {

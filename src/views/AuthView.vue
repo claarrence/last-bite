@@ -104,7 +104,11 @@ async function register() {
   }
   const { error: profileError } = await supabase.from(profileTable.value).insert(profile)
   if (profileError) {
-    alert(profileError.message)
+    alert(
+      profileError.code === 'PGRST116'
+        ? 'Account not found for this account type. Check whether you selected User or Establishment.'
+        : profileError.message,
+    )
     return
   }
 

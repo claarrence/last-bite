@@ -3,6 +3,7 @@ defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, required: true },
   confirmLabel: { type: String, default: 'Confirm' },
+  confirmVariant: { type: String, default: 'danger' },
   busy: { type: Boolean, default: false },
 })
 const emit = defineEmits(['confirm', 'cancel'])
@@ -43,7 +44,8 @@ const emit = defineEmits(['confirm', 'cancel'])
             </button>
             <button
               type="button"
-              class="btn btn-danger"
+              class="btn"
+              :class="`btn-${confirmVariant}`"
               :disabled="busy"
               data-testid="confirm-button"
               @click="emit('confirm')"

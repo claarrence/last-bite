@@ -31,10 +31,10 @@ const { homeHref, goHome } = useHomeNavigation()
     </div>
   </main>
 
-  <div v-else :inert="feedback.active" :aria-busy="feedback.active">
+  <div v-else class="d-flex flex-column min-vh-100" :inert="feedback.active" :aria-busy="feedback.active">
     <RouterView />
     <AppToast />
-    <footer class="container pt-4 d-flex flex-wrap justify-content-between gap-3 site-footer">
+    <footer class="container mt-auto pt-4 d-flex flex-wrap justify-content-between gap-3 site-footer">
       <a :href="homeHref" class="text-decoration-none" aria-label="Last Bite home" @click="goHome">
         <BrandLogo />
       </a>

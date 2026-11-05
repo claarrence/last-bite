@@ -103,7 +103,9 @@ const router = createRouter({
 
 // Protected pages require a signed-in user; database policies enforce ownership.
 router.beforeEach(async (to) => {
-  if (to.meta.requiresAuth && !(await getCurrentUser())) {
+  if (!to.meta.requiresAuth) return
+  const user = await getCurrentUser()
+  if (!user) {
     return { name: 'auth', query: { redirect: to.fullPath } }
   }
 })

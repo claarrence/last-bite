@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { useHomeNavigation } from '@/composables/useHomeNavigation'
 import { supabase } from '@/utils/supabase'
-import { getCurrentUser } from '@/utils/session'
+import { getCurrentUser, isEstablishment } from '@/utils/session'
 
 defineProps({ brandOpacity: { type: Number, default: 1 } })
 const brandElement = ref(null)
@@ -16,6 +16,18 @@ function closeMenu() {
 }
 
 const user = ref(null)
+const establishment = ref(null)
+watch(
+  () => user.value?.id,
+  async (id, _previous, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => { cancelled = true })
+    establishment.value = null
+    const provider = id ? await isEstablishment() : false
+    if (!cancelled) establishment.value = provider
+  },
+  { immediate: true },
+)
 const router = useRouter()
 const { homeHref, goHome, homeEntrance } = useHomeNavigation()
 let subscription
@@ -102,6 +114,13 @@ async function logout() {
           </button>
           <div v-if="accountOpen" class="account-dropdown" data-testid="account-dropdown">
             <p class="account-email">{{ user.email }}</p>
+            <router-link
+              v-if="establishment"
+              :to="{ name: 'establishment', params: { id: user.id } }"
+              class="account-link"
+              @click="closeAccount"
+              >My reviews</router-link
+            >
             <button type="button" class="account-link account-logout" @click="logout">
               Log out
             </button>
@@ -124,7 +143,9 @@ async function logout() {
         <div class="navbar-nav ms-auto align-items-sm-center gap-sm-3" @click="closeMenu">
           <router-link to="/#browse" class="nav-link">Browse food</router-link>
           <router-link to="/my-listings" class="nav-link">My listings</router-link>
-          <router-link to="/my-reservations" class="nav-link">My reservations</router-link>
+          <router-link to="/my-reservations" class="nav-link"
+            >My reservations</router-link
+          >
           <router-link to="/listing-form" class="nav-link">Post food</router-link>
         </div>
       </div>

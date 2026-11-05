@@ -9,7 +9,7 @@ import ProviderReservations from '@/components/reservations/ProviderReservations
 import StatusUpdates from '@/components/status/StatusUpdates.vue'
 import StarRating from '@/components/reviews/StarRating.vue'
 import { useListingActions } from '@/composables/useListingActions'
-import { getCurrentUser } from '@/utils/session'
+import { getCurrentUser, isEstablishment } from '@/utils/session'
 import { displayStatus, getListing, photoUrl } from '@/utils/listings'
 import { getActiveReservation, getReservedQuantities } from '@/utils/reservations'
 import { remainingPortions } from '@/utils/reservationRules'
@@ -26,6 +26,7 @@ const router = useRouter()
 
 const listing = ref(null)
 const userId = ref(null)
+const establishment = ref(false)
 const loading = ref(true)
 const error = ref('')
 
@@ -52,7 +53,7 @@ async function loadReservationInfo() {
   reservationError.value = ''
   try {
     await loadReservedCount()
-    if (userId.value && !isOwner.value) {
+    if (userId.value && !isOwner.value && !establishment.value) {
       activeReservation.value = await getActiveReservation(listing.value.id, userId.value)
     }
   } catch (err) {
@@ -95,6 +96,7 @@ let stopListening = null
 onMounted(async () => {
   try {
     userId.value = (await getCurrentUser())?.id ?? null
+    if (userId.value) establishment.value = await isEstablishment()
     listing.value = await getListing(props.id)
     if (!listing.value) error.value = 'This listing no longer exists.'
     else {
@@ -348,7 +350,7 @@ const reportedGone = computed(() => updates.value[0]?.status === 'all_gone')
             :pickup-end="listing.pickup_end"
           />
           <ReserveForm
-            v-else
+            v-else-if="!establishment"
             :listing="listing"
             :remaining="remaining"
             :status="status"

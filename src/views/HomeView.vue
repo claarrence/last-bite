@@ -170,11 +170,11 @@ onUnmounted(() => clearInterval(timer))
           </a>
         </h1>
         <div :key="homeEntrance" class="hero-actions page-enter">
-          <router-link to="/#browse" class="btn btn-success"
-            >Browse food <span aria-hidden="true">↓</span></router-link
-          >
-          <router-link to="/listing-form" class="hero-post"
+          <router-link to="/listing-form" class="btn btn-success"
             >Post food <span aria-hidden="true">↗</span></router-link
+          >
+          <router-link to="/#browse" class="hero-post"
+            >Browse food <span aria-hidden="true">↓</span></router-link
           >
         </div>
       </div>

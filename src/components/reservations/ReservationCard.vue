@@ -11,6 +11,7 @@ const props = defineProps({
   reservation: { type: Object, required: true },
   // 'reserved' | 'collected' | 'cancelled' | 'expired'
   status: { type: String, required: true },
+  compact: { type: Boolean, default: false },
 })
 
 const listing = computed(() => props.reservation.listing)
@@ -24,7 +25,7 @@ const priceText = computed(
 
 <template>
   <article class="card h-100 listing-card" data-testid="reservation-card">
-    <div class="ratio ratio-4x3 bg-body-secondary rounded-top overflow-hidden">
+    <div v-if="!compact" class="ratio ratio-4x3 bg-body-secondary rounded-top overflow-hidden">
       <img
         v-if="listing.photo_path"
         :src="photoUrl(listing.photo_path)"
@@ -62,13 +63,14 @@ const priceText = computed(
       <p v-if="listing.address" class="small text-secondary mb-0 text-break">
         {{ listing.address }}
       </p>
-      <p v-if="listing.collection_instructions" class="small mb-0 text-break">
+      <p v-if="!compact && listing.collection_instructions" class="small mb-0 text-break">
         <span class="fw-semibold">How to collect:</span> {{ listing.collection_instructions }}
       </p>
       <!-- &nbsp; keeps the space: Vue removes line breaks between two tags. -->
       <p class="small mb-0">
         <span class="fw-semibold">Pickup number:</span>&nbsp;<span
           class="font-monospace fw-bold pickup-chip"
+          :class="{ 'fs-5': compact }"
           data-testid="reservation-code"
           >{{ reservation.pickup_code }}</span
         >

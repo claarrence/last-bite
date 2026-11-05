@@ -61,10 +61,6 @@ body {
     translate: 0 24px;
   }
 }
-.page-content {
-  /* Keep the footer below the first screen while route data arrives. */
-  min-height: calc(100svh - 205px);
-}
 ::selection {
   background: #e9b49d80;
 }
@@ -231,7 +227,7 @@ a {
   transition: transform 250ms;
 }
 .hero-actions .btn:hover span {
-  transform: translateY(3px);
+  transform: translate(3px, -3px);
 }
 .hero-post {
   font-size: 13px;
@@ -244,7 +240,7 @@ a {
   transition: transform 250ms;
 }
 .hero-post:hover span {
-  transform: translate(3px, -3px);
+  transform: translateY(3px);
 }
 .hero-food {
   width: 100%;
@@ -397,7 +393,7 @@ footer {
   align-items: center;
   padding-inline-end: 100px;
   /* Room for the floating + button, so it never covers the footer links. */
-  padding-bottom: 96px;
+  padding-bottom: 24px;
 }
 .site-footer a {
   color: var(--color-muted);
@@ -452,6 +448,9 @@ footer {
     justify-content: center;
     margin-top: 24px;
     gap: 24px;
+  }
+  .hero-actions .btn {
+    padding: 10px 16px;
   }
   .hero-food {
     width: 220px;

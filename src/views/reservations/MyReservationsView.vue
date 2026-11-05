@@ -7,10 +7,11 @@ import ReservationCard from '@/components/reservations/ReservationCard.vue'
 import QuantityStepper from '@/components/reservations/QuantityStepper.vue'
 import { useToast } from '@/composables/useToast'
 import { useActionFeedback } from '@/composables/useActionFeedback'
-import { getCurrentUser } from '@/utils/session'
+import { getCurrentUser, isEstablishment } from '@/utils/session'
 import {
   cancelReservation,
   getMyReservations,
+  markReservationCollected,
   updateReservationQuantity,
 } from '@/utils/reservations'
 import { RESERVATION_TABS, reservationStatus } from '@/utils/reservationRules'
@@ -27,18 +28,21 @@ const reservations = ref([])
 const loading = ref(true)
 const error = ref('')
 const activeTab = ref('reserved')
+const establishment = ref(false)
 
 // Per-reservation quantity inputs and error messages, keyed by reservation id.
 const quantityDrafts = ref({})
 const rowErrors = ref({})
 const busyId = ref(null)
 const pendingCancel = ref(null)
+const pendingCollection = ref(null)
 
 onMounted(async () => {
   let user = null
   try {
     user = await getCurrentUser()
-    reservations.value = await getMyReservations(user.id)
+    establishment.value = await isEstablishment()
+    reservations.value = await getMyReservations(user.id, establishment.value)
     for (const r of reservations.value) quantityDrafts.value[r.id] = r.quantity
   } catch (err) {
     error.value = err.message
@@ -46,7 +50,7 @@ onMounted(async () => {
     loading.value = false
   }
   // Loaded after the bookings are shown, so a slow reviews request cannot hold up the page.
-  if (user) await loadReviewedIds(user.id)
+  if (user && !establishment.value) await loadReviewedIds(user.id)
 })
 
 // If reviews cannot load, the bookings still work; review links just say "Write".
@@ -149,6 +153,24 @@ async function confirmCancel() {
     busyId.value = null
   }
 }
+
+async function confirmCollection() {
+  if (!pendingCollection.value || busyId.value) return
+  const reservation = pendingCollection.value
+  busyId.value = reservation.id
+  try {
+    const updated = await runAction('Confirming collection…', () =>
+      markReservationCollected(reservation.listing_id, reservation.pickup_code),
+    )
+    replaceReservation(updated)
+    pendingCollection.value = null
+    showToast(`${updated.pickup_code} marked as collected`)
+  } catch (err) {
+    showToast(err.message, 'danger')
+  } finally {
+    busyId.value = null
+  }
+}
 </script>
 
 <template>
@@ -157,14 +179,16 @@ async function confirmCancel() {
   <div class="container page-content py-4" :aria-busy="loading">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
       <h1 class="h2 page-title mb-0">My Reservations</h1>
-      <RouterLink to="/#browse" class="btn btn-success">Browse food</RouterLink>
+      <RouterLink v-if="!loading" :to="establishment ? '/my-listings' : '/#browse'" class="btn btn-success"
+        >{{ establishment ? 'My listings' : 'Browse food' }}</RouterLink
+      >
     </div>
 
     <div v-if="!loading && error" class="alert alert-danger" role="alert">{{ error }}</div>
 
     <template v-else-if="!loading">
       <div
-        v-if="toReviewCount"
+        v-if="!establishment && toReviewCount"
         class="alert alert-success d-flex flex-wrap align-items-center gap-2"
         role="status"
         data-testid="review-prompt"
@@ -207,7 +231,7 @@ async function confirmCancel() {
       >
         <p class="mb-2">No {{ activeTabLabel }} reservations.</p>
         <RouterLink
-          v-if="activeTab === 'reserved'"
+          v-if="!establishment && activeTab === 'reserved'"
           to="/#browse"
           class="btn btn-outline-success btn-sm"
         >
@@ -217,8 +241,22 @@ async function confirmCancel() {
 
       <div v-else class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
         <div v-for="reservation in visible" v-reveal="'lift'" :key="reservation.id" class="col">
-          <ReservationCard :reservation="reservation" :status="activeTab">
-            <template v-if="activeTab === 'reserved'" v-slot:actions>
+          <ReservationCard :reservation="reservation" :status="activeTab" :compact="establishment">
+            <template
+              v-if="establishment && (activeTab === 'reserved' || activeTab === 'expired')"
+              v-slot:actions
+            >
+              <div class="d-flex justify-content-end">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-success bg-success px-3 text-white"
+                  :disabled="!!busyId"
+                  data-testid="collect-reservation-button"
+                  @click="pendingCollection = reservation"
+                >Mark collected</button>
+              </div>
+            </template>
+            <template v-else-if="!establishment && activeTab === 'reserved'" v-slot:actions>
               <form
                 class="d-flex flex-wrap align-items-center gap-2"
                 novalidate
@@ -257,7 +295,7 @@ async function confirmCancel() {
                 {{ rowErrors[reservation.id] }}
               </p>
             </template>
-            <template v-else-if="activeTab === 'collected'" v-slot:actions>
+            <template v-else-if="!establishment && activeTab === 'collected'" v-slot:actions>
               <RouterLink
                 :to="{ name: 'review-form', params: { reservationId: reservation.id } }"
                 class="btn btn-sm btn-outline-success"
@@ -284,6 +322,26 @@ async function confirmCancel() {
       Your {{ pendingCancel.quantity }} portion{{ pendingCancel.quantity === 1 ? '' : 's' }} of "{{
         pendingCancel.listing.title
       }}" will be released for others. The booking stays in your history.
+    </p>
+  </ConfirmDialog>
+
+  <ConfirmDialog
+    :open="!!pendingCollection"
+    title="Confirm collection?"
+    confirm-label="Mark collected"
+    confirm-variant="success"
+    :busy="!!busyId"
+    @confirm="confirmCollection"
+    @cancel="!busyId && (pendingCollection = null)"
+  >
+    <p v-if="pendingCollection" class="mb-0">
+      Confirm pickup number
+      <strong class="font-monospace">{{ pendingCollection.pickup_code }}</strong>
+      to collect:
+      <span class="d-block mt-2 fw-semibold">
+        {{ pendingCollection.listing.title }} · {{ pendingCollection.quantity }}
+        portion{{ pendingCollection.quantity === 1 ? '' : 's' }}
+      </span>
     </p>
   </ConfirmDialog>
 </template>

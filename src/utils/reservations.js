@@ -73,12 +73,12 @@ export async function markReservationCollected(listingId, pickupCode) {
   return data
 }
 
-// The signed-in customer's bookings, newest first, with the listing details.
-export async function getMyReservations(userId) {
+// Customers see their bookings; establishments see bookings for their own food.
+export async function getMyReservations(userId, establishment = false) {
   const { data, error } = await supabase
     .from('reservations')
-    .select(`*, listing:listings(${LISTING_FIELDS})`)
-    .eq('customer_id', userId)
+    .select(`*, listing:listings!inner(${LISTING_FIELDS})`)
+    .eq(establishment ? 'listing.owner_id' : 'customer_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw explainError(error, SQL_FILE)
   return data

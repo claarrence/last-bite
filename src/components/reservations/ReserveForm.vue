@@ -152,10 +152,10 @@ async function submitReservation() {
   background: var(--color-bg);
 }
 .pickup-ticket::before {
-  left: -13px;
+  left: -12px;
 }
 .pickup-ticket::after {
-  right: -13px;
+  right: -12px;
 }
 .pickup-ticket p {
   margin: 0;

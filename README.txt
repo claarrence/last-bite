@@ -81,29 +81,33 @@ Reservations setup (Supabase dashboard -> SQL Editor):
   5. Run supabase/migrations/003_reviews.sql for reviews and ratings (it only
      needs 002, so it can run before or after 004 and 005).
 Existing pickup references remain valid after running 004.
+Run supabase/migrations/006_customer_reservations.sql to prevent establishment
+accounts from booking food or changing booked quantities.
 
 RESERVATIONS
 ------------
-Ported from claarrence/A-Plus-for-WAD2 (ece974e), retaining its reservation
-rules, database functions, quantity stepper and pickup ticket.
 
-Browse food -> open a discounted listing -> choose portions -> Reserve.
-The returned booking shows its pickup number and agreed price; payment is at
-collection. My reservations supports quantity changes, cancellation and Active,
-Collected, Cancelled and Expired history tabs. Providers open their listing from
-My listings and enter the customer's pickup number to confirm collection.
-Free listings remain walk-in only.
+Customer:
+Browse food -> open a discounted listing -> pick portions -> Reserve
+-> get a 6-digit pickup number -> show it at collection and pay.
 
-Data flow: a Vue action calls src/utils/reservations.js -> Supabase RPC ->
-PostgreSQL validates permissions, stock and pickup deadline -> the returned
-reservation updates the interface. Database row locks prevent overselling, and
-booking records keep their agreed unit price. Closing a listing preserves its
-bookings; a listing with reservation records cannot be deleted.
+Establishment:
+My reservations -> view orders for all your food -> check the pickup number
+-> Mark collected. No need to open each listing or type the number again.
 
-The listing detail page and food grid make bookings reachable. The homepage
-now has local search, type filters, pickup-deadline and distance sorting, and
-a link to the food map.
-No migrations are applied automatically by running the frontend.
+My reservations -> view bookings -> change portions or cancel before pickup ends.
+Tabs: Active / Collected / Cancelled / Expired.
+
+- Only customers can reserve. Establishments use My reservations for incoming
+  orders, and My reviews is in their account menu.
+- Free food is walk-in only.
+- Each booking keeps its original price and stays in the history.
+- Closing a listing keeps its bookings. Listings with bookings cannot be deleted.
+
+Behind the Reserve button:
+Reserve -> src/utils/reservations.js -> Supabase checks the account, stock
+and pickup deadline -> saves the booking -> shows the pickup number.
+The database locks the listing while booking to prevent overbooking.
 
 REVIEWS AND RATINGS
 -------------------

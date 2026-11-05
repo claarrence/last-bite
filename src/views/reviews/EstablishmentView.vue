@@ -158,7 +158,7 @@ async function saveReply(review, text) {
       <template v-else>
         <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
           <label for="review-sort" class="small text-secondary text-nowrap">Sort by</label>
-          <select id="review-sort" v-model="sortBy" class="form-select w-auto">
+          <select id="review-sort" v-model="sortBy" class="form-select w-auto pe-5">
             <option v-for="option in REVIEW_SORTS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>

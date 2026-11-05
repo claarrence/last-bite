@@ -8,6 +8,9 @@ for (const role of ['User', 'Establishment']) {
   test(`${role} login checks the correct profile and redirects`, async ({ page }) => {
     let profileChecked = false
     await page.route('**/auth/v1/token**', (route) => route.fulfill({ json: session }))
+    await page.route('**/rest/v1/rpc/is_establishment', (route) =>
+      route.fulfill({ json: role === 'Establishment' }),
+    )
     await page.route(`**/rest/v1/${table}*`, (route) => {
       profileChecked = true
       return route.fulfill({ json: { name: 'Test account' } })
@@ -18,6 +21,12 @@ for (const role of ['User', 'Establishment']) {
     await page.getByLabel('Password', { exact: true }).fill('test-password')
     await page.getByRole('button', { name: 'Log in', exact: true }).click()
     await expect(page).toHaveURL(role === 'User' ? /\/$/ : /\/establishment-dashboard$/)
+    const navigation = page.getByRole('navigation', { name: 'Main navigation' })
+    await expect(navigation.getByRole('link', { name: 'My reservations', exact: true }))
+      .toHaveAttribute('href', '/my-reservations')
+    await page.getByTestId('avatar-button').click()
+    await expect(navigation.getByRole('link', { name: 'My reviews', exact: true }))
+      .toHaveCount(role === 'Establishment' ? 1 : 0)
     expect(profileChecked).toBe(true)
   })
 
